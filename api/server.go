@@ -19,6 +19,7 @@ import (
 var server *grpc.Server
 var authenticate bool
 var password string
+var NOSHUTDOWN bool
 
 func StartServer(Connection *pb.SdfsConnection, port string, enableAuth, dedupe, debug bool, pwd string) {
 	password = pwd
@@ -27,7 +28,7 @@ func StartServer(Connection *pb.SdfsConnection, port string, enableAuth, dedupe,
 	if err != nil {
 		log.Fatalf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
 	}
-	vc := NewVolumeProxy(Connection.Clnt, pwd, debug)
+	vc := NewVolumeProxy(Connection.Clnt, pwd)
 	ec := NewEventProxy(Connection.Clnt)
 	lis, err := net.Listen("tcp", port)
 	if err != nil {

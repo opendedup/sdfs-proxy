@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"runtime"
 
 	"fmt"
 	"io/ioutil"
@@ -21,7 +22,6 @@ import (
 	paip "github.com/opendedup/sdfs-proxy/api"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2b"
-	"google.golang.org/grpc"
 )
 
 var maddress = "sdfss://localhost:6442"
@@ -67,19 +67,21 @@ func TestNewConnection(t *testing.T) {
 }
 
 func TestChow(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	connection := connect(t, false)
-	defer connection.CloseConnection(ctx)
-	assert.NotNil(t, connection)
-	fn, _ := makeFile(t, "", 128, false)
-	err := connection.Chown(ctx, fn, int32(100), int32(100))
-	assert.Nil(t, err)
-	stat, err := connection.GetAttr(ctx, fn)
-	assert.Nil(t, err)
-	assert.Equal(t, stat.Gid, int32(100))
-	assert.Equal(t, stat.Uid, int32(100))
-	deleteFile(t, fn)
+	if runtime.GOOS != "windows" {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		connection := connect(t, false)
+		defer connection.CloseConnection(ctx)
+		assert.NotNil(t, connection)
+		fn, _ := makeFile(t, "", 128, false)
+		err := connection.Chown(ctx, fn, int32(100), int32(100))
+		assert.Nil(t, err)
+		stat, err := connection.GetAttr(ctx, fn)
+		assert.Nil(t, err)
+		assert.Equal(t, stat.Gid, int32(100))
+		assert.Equal(t, stat.Uid, int32(100))
+		deleteFile(t, fn)
+	}
 }
 
 func TestMkNod(t *testing.T) {
@@ -105,7 +107,9 @@ func TestMkDir(t *testing.T) {
 	assert.Nil(t, err)
 	stat, err := connection.GetAttr(ctx, "testdir")
 	assert.Nil(t, err)
-	assert.Equal(t, stat.Mode, int32(16895))
+	if runtime.GOOS != "windows" {
+		assert.Equal(t, stat.Mode, int32(16895))
+	}
 	err = connection.RmDir(ctx, "testdir")
 	assert.Nil(t, err)
 	_, err = connection.GetAttr(ctx, "testdir")
@@ -123,7 +127,9 @@ func TestMkDirAll(t *testing.T) {
 	assert.Nil(t, err)
 	stat, err := connection.GetAttr(ctx, "testdir/t")
 	assert.Nil(t, err)
-	assert.Equal(t, stat.Mode, int32(16832))
+	if runtime.GOOS != "windows" {
+		assert.Equal(t, stat.Mode, int32(16832))
+	}
 	err = connection.RmDir(ctx, "testdir/t")
 	assert.Nil(t, err)
 	_, err = connection.GetAttr(ctx, "testdir/t")
@@ -156,7 +162,11 @@ func TestListDir(t *testing.T) {
 		afiles = append(afiles, l.FilePath)
 		connection.DeleteFile(ctx, l.FilePath)
 	}
-	assert.ElementsMatch(t, files, afiles)
+	if runtime.GOOS != "windows" {
+		assert.ElementsMatch(t, files, afiles)
+	} else {
+		assert.Equal(t, len(files), len(afiles))
+	}
 	err = connection.RmDir(ctx, dn)
 	assert.Nil(t, err)
 	_, err = connection.GetAttr(ctx, dn)
@@ -169,16 +179,12 @@ func TestCleanStore(t *testing.T) {
 }
 
 func TestStatFS(t *testing.T) {
-	t.Log("nnnnn")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	t.Log("ccccc ")
-	conn, err := grpc.DialContext(ctx, "localhost:16442", grpc.WithInsecure(), grpc.WithBlock())
-	t.Log("dddc")
-	assert.Nil(t, err)
-	fc := spb.NewFileIOServiceClient(conn)
-	fi, err := fc.StatFS(ctx, &spb.StatFSRequest{})
-	t.Logf("fi %v", fi)
+	connection := connect(t, false)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	_, err := connection.StatFS(ctx)
 	assert.Nil(t, err)
 }
 
@@ -314,29 +320,31 @@ func TestTuncate(t *testing.T) {
 }
 
 func TestSymLink(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	connection := connect(t, false)
-	assert.NotNil(t, connection)
-	defer connection.CloseConnection(ctx)
-	fn, _ := makeFile(t, "", 1024, false)
-	sfn := string(randBytesMaskImpr(16))
-	err := connection.SymLink(ctx, fn, sfn)
-	assert.Nil(t, err)
-	_sfn, err := connection.ReadLink(ctx, sfn)
-	assert.Nil(t, err)
-	assert.Equal(t, fn, _sfn)
-	_, err = connection.GetAttr(ctx, sfn)
-	assert.Nil(t, err)
-	_, fls, err := connection.ListDir(ctx, "/", "", false, int32(100))
-	assert.Equal(t, len(fls), 2)
-	assert.Nil(t, err)
-	err = connection.Unlink(ctx, sfn)
-	assert.Nil(t, err)
-	_, err = connection.GetAttr(ctx, sfn)
-	assert.NotNil(t, err)
-	err = connection.DeleteFile(ctx, fn)
-	assert.Nil(t, err)
+	if runtime.GOOS != "windows" {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		connection := connect(t, false)
+		assert.NotNil(t, connection)
+		defer connection.CloseConnection(ctx)
+		fn, _ := makeFile(t, "", 1024, false)
+		sfn := string(randBytesMaskImpr(16))
+		err := connection.SymLink(ctx, fn, sfn)
+		assert.Nil(t, err)
+		_sfn, err := connection.ReadLink(ctx, sfn)
+		assert.Nil(t, err)
+		assert.Equal(t, fn, _sfn)
+		_, err = connection.GetAttr(ctx, sfn)
+		assert.Nil(t, err)
+		_, fls, err := connection.ListDir(ctx, "/", "", false, int32(100))
+		assert.Equal(t, len(fls), 2)
+		assert.Nil(t, err)
+		err = connection.Unlink(ctx, sfn)
+		assert.Nil(t, err)
+		_, err = connection.GetAttr(ctx, sfn)
+		assert.NotNil(t, err)
+		err = connection.DeleteFile(ctx, fn)
+		assert.Nil(t, err)
+	}
 }
 
 func TestSync(t *testing.T) {
@@ -382,11 +390,13 @@ func TestMaxAge(t *testing.T) {
 	sz := info.CurrentSize
 	nfn := string(randBytesMaskImpr(16))
 	time.Sleep(10 * time.Second)
-	_, err = connection.Download(ctx, _nfn, "/tmp/"+nfn)
-	defer os.Remove("/tmp/" + nfn)
+
+	_, err = connection.Download(ctx, _nfn, nfn)
+	defer os.Remove(nfn)
 	assert.Nil(t, err)
-	_, err = connection.Upload(ctx, "/tmp/"+nfn, nfn)
+	_, err = connection.Upload(ctx, nfn, nfn)
 	assert.Nil(t, err)
+	os.Remove(_nfn)
 	info, err = connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 	nsz := info.CurrentSize
@@ -432,10 +442,10 @@ func TestMaxAge(t *testing.T) {
 	_nfn, _ = makeFile(t, "", fsz, false)
 	nfn = string(randBytesMaskImpr(16))
 	time.Sleep(10 * time.Second)
-	_, err = connection.Download(ctx, _nfn, "/tmp/"+nfn)
+	_, err = connection.Download(ctx, _nfn, nfn)
 	assert.Nil(t, err)
 	for i := 0; i < 10; i++ {
-		_, err = connection.Upload(ctx, "/tmp/"+nfn, fmt.Sprintf("file%d", i))
+		_, err = connection.Upload(ctx, nfn, fmt.Sprintf("file%d", i))
 		if err != nil {
 			t.Logf("upload error %v", err)
 		}
@@ -469,7 +479,7 @@ func TestMaxAge(t *testing.T) {
 	sz = info.CurrentSize
 	t.Logf("sz = %d, nsz=%d", sz, nsz)
 	assert.Less(t, sz, nsz)
-	os.Remove("/tmp/" + nfn)
+	os.Remove(nfn)
 	err = connection.SetMaxAge(ctx, -1)
 	assert.Nil(t, err)
 }
@@ -832,20 +842,24 @@ func TestUpload(t *testing.T) {
 func TestMain(m *testing.M) {
 
 	rand.Seed(time.Now().UTC().UnixNano())
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		fmt.Printf("Unable to create docker client %v", err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cli.NegotiateAPIVersion(ctx)
-	containername := string(randBytesMaskImpr(16))
-	portopening := "6442"
-	inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
-	cmd := []string{}
-	_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
-	if err != nil {
-		fmt.Printf("Unable to create docker client %v", err)
+	var cli *client.Client
+	var containername string
+	if runtime.GOOS != "windows" {
+		cli, err := client.NewClientWithOpts(client.FromEnv)
+		if err != nil {
+			fmt.Printf("Unable to create docker client %v", err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		cli.NegotiateAPIVersion(ctx)
+		containername = string(randBytesMaskImpr(16))
+		portopening := "6442"
+		inputEnv := []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
+		cmd := []string{}
+		_, err = runContainer(cli, imagename, containername, portopening, portopening, inputEnv, cmd)
+		if err != nil {
+			fmt.Printf("Unable to create docker client %v", err)
+		}
 	}
 	api.DisableTrust = true
 	connection, err := api.NewConnection(maddress, false)
@@ -863,13 +877,16 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Printf("Unable to create connection %v", err)
 	}
+	paip.NOSHUTDOWN = true
 	if connection != nil {
-		go paip.StartServer(connection, port, true, true, true, password)
+		go paip.StartServer(connection, port, true, true, false, password)
 	}
 	fmt.Printf("Server initialized at %s\n", port)
 	code := m.Run()
 	paip.StopServer()
-	stopAndRemoveContainer(cli, containername)
+	if runtime.GOOS != "windows" {
+		stopAndRemoveContainer(cli, containername)
+	}
 	os.Exit(code)
 }
 

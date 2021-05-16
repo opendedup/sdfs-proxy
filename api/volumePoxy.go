@@ -21,7 +21,6 @@ type VolumeProxy struct {
 	vc       spb.VolumeServiceClient
 	Clnt     *grpc.ClientConn
 	password string
-	debug    bool
 }
 
 func (s *VolumeProxy) AuthenticateUser(ctx context.Context, req *spb.AuthenticationRequest) (*spb.AuthenticationResponse, error) {
@@ -118,15 +117,15 @@ func (s *VolumeProxy) shutdown() {
 	timer := time.NewTimer(10 * time.Second)
 	log.Warn("Shutting down volume")
 	<-timer.C
-	if !s.debug {
+	if !NOSHUTDOWN {
 		os.Exit(0)
 	}
 
 }
 
-func NewVolumeProxy(clnt *grpc.ClientConn, password string, debug bool) *VolumeProxy {
+func NewVolumeProxy(clnt *grpc.ClientConn, password string) *VolumeProxy {
 	vc := spb.NewVolumeServiceClient(clnt)
-	sc := &VolumeProxy{vc: vc, Clnt: clnt, password: password, debug: debug}
+	sc := &VolumeProxy{vc: vc, Clnt: clnt, password: password}
 	return sc
 
 }
