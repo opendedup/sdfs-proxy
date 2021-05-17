@@ -11,5 +11,5 @@ RUN  \
      apk add --no-cache git build-base && \
      cd /go/sdfs-proxy && \
      mkdir -p /go/sdfs-proxy/build
-WORKDIR /go/sdfs-client-go/
+WORKDIR /go/sdfs-proxy/
 RUN make clean && make build
