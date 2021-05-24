@@ -3,11 +3,14 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
+	"strings"
+
+	log "github.com/sirupsen/logrus"
 
 	pb "github.com/opendedup/sdfs-client-go/api"
 	"github.com/opendedup/sdfs-proxy/api"
+	"github.com/sevlyar/go-daemon"
 )
 
 var Version = "development"
@@ -29,6 +32,7 @@ func main() {
 	mtlscert := flag.String("mtls-cert", "", "The path the client cert used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.crt")
 	dedupe := flag.Bool("dedupe", false, "Enable Client Side Dedupe")
 	debug := flag.Bool("debug", false, "Debug to stdout")
+	standalone := flag.Bool("s", false, "do not daemonize mount")
 	flag.Parse()
 	enableAuth := false
 	if *version {
@@ -72,8 +76,34 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to connect to %s: %v\n", *address, err)
 	}
+	os.MkdirAll("/var/run/sdfs/", os.ModePerm)
+	os.MkdirAll("/var/log/sdfs/", os.ModePerm)
+	if !*standalone {
 
-	api.StartServer(Connection, *port, enableAuth, *dedupe, *debug, *lpwd)
+		pidFile := "/var/run/sdfs/proxy-" + strings.ReplaceAll(*port, ":", "-") + ".pid"
+		logFile := "/var/log/sdfs/proxy-" + strings.ReplaceAll(*port, ":", "-") + ".log"
+		mcntxt := &daemon.Context{
+			PidFileName: pidFile,
+			PidFilePerm: 0644,
+			LogFileName: logFile,
+			LogFilePerm: 0640,
+			WorkDir:     "/var/run/",
+			Umask:       027,
+		}
+
+		d, err := mcntxt.Reborn()
+		if err != nil {
+			log.Errorf("Unable to run: %v \n", err)
+			os.Exit(3)
+		}
+		if d != nil {
+			return
+		}
+		defer mcntxt.Release()
+		api.StartServer(Connection, *port, enableAuth, *dedupe, *debug, *lpwd)
+	} else {
+		api.StartServer(Connection, *port, enableAuth, *dedupe, *debug, *lpwd)
+	}
 
 }
 

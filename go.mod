@@ -9,8 +9,10 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/go-errors/errors v1.1.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
+	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/opendedup/go-rabin v0.0.0-20210502160858-b8d2d864c5c0 // indirect
 	github.com/opendedup/sdfs-client-go v0.1.37-0.20210510182906-c275408a24de
+	github.com/sevlyar/go-daemon v0.1.5 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
 	github.com/square/certstrap v1.2.0 // indirect
 	github.com/stretchr/testify v1.7.0
