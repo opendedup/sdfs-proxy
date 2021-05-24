@@ -7,7 +7,7 @@ steps:
     - --dockerfile=Dockerfile
 - name: gcr.io/cloud-builders/docker
   entrypoint: 'bash'
-  args: [ '-c', 'docker run -v /workspace:/opt/mount --rm --entrypoint cp gcr.io/$PROJECT_ID/hybrics-proxy:$BRANCH_NAME /go/sdfs-proxy/build/sdfs-proxy* /opt/mount/']
+  args: [ '-c', 'docker run -v /workspace:/opt/mount --rm --entrypoint cp gcr.io/$PROJECT_ID/hybrics-proxy:$BRANCH_NAME /go/sdfs-proxy/build/* /opt/mount/']
 - name: gcr.io/cloud-builders/gcloud
   entrypoint: 'bash'
   args: [ '-c', "gsutil cp /workspace/sdfs-proxy gs://${_DIST_BUCKET}/sdfs-proxy/sdfs-proxy-$BRANCH_NAME" ]
