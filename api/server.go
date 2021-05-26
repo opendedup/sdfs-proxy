@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"strings"
@@ -41,6 +42,8 @@ func StartServer(Connection *pb.SdfsConnection, port string, enableAuth, dedupe,
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+	fmt.Printf("Listening on %s auth enabled %v, dedupe enabled %v", port, enableAuth, dedupe)
+	fmt.Printf("proxy ready\n")
 }
 
 func serverInterceptor(ctx context.Context,
