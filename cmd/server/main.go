@@ -72,8 +72,9 @@ func main() {
 		//fmt.Println("Using Mutual TLS")
 		pb.Mtls = *mtls
 	}
-	//fmt.Printf("Connecting to %s\n", *address)
+
 	Connection, err := pb.NewConnection(*address, *dedupe)
+	fmt.Printf("Connected to %s\n", *address)
 	if err != nil {
 		log.Fatalf("Unable to connect to %s: %v\n", *address, err)
 	}
