@@ -39,11 +39,12 @@ func StartServer(Connection *pb.SdfsConnection, port string, enableAuth, dedupe,
 	sdfs.RegisterVolumeServiceServer(server, vc)
 	sdfs.RegisterFileIOServiceServer(server, fc)
 	sdfs.RegisterSDFSEventServiceServer(server, ec)
+	fmt.Printf("Listening on %s auth enabled %v, dedupe enabled %v", port, enableAuth, dedupe)
+	fmt.Printf("proxy ready\n")
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-	fmt.Printf("Listening on %s auth enabled %v, dedupe enabled %v", port, enableAuth, dedupe)
-	fmt.Printf("proxy ready\n")
+
 }
 
 func serverInterceptor(ctx context.Context,
