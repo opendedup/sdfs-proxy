@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -71,14 +72,15 @@ func main() {
 		//fmt.Println("Using Mutual TLS")
 		pb.Mtls = *mtls
 	}
-	//fmt.Printf("Connecting to %s\n", *address)
+
 	Connection, err := pb.NewConnection(*address, *dedupe)
+	fmt.Printf("Connected to %s\n", *address)
 	if err != nil {
 		log.Fatalf("Unable to connect to %s: %v\n", *address, err)
 	}
 	os.MkdirAll("/var/run/sdfs/", os.ModePerm)
 	os.MkdirAll("/var/log/sdfs/", os.ModePerm)
-	if !*standalone {
+	if !*standalone && runtime.GOOS != "windows" {
 
 		pidFile := "/var/run/sdfs/proxy-" + strings.ReplaceAll(*port, ":", "-") + ".pid"
 		logFile := "/var/log/sdfs/proxy-" + strings.ReplaceAll(*port, ":", "-") + ".log"
