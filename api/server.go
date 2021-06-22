@@ -35,8 +35,9 @@ func StartServer(Connection *pb.SdfsConnection, port string, enableAuth, dedupe,
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
+	maxMsgSize := 2097152 * 40
 	server = grpc.NewServer(grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
-		grpc.MaxRecvMsgSize(2097152*40))
+		grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize))
 	sdfs.RegisterVolumeServiceServer(server, vc)
 	sdfs.RegisterFileIOServiceServer(server, fc)
 	sdfs.RegisterSDFSEventServiceServer(server, ec)

@@ -772,6 +772,8 @@ github.com/opendedup/go-rabin v0.0.0-20210502160858-b8d2d864c5c0 h1:uWbYeQjg6kid
 github.com/opendedup/go-rabin v0.0.0-20210502160858-b8d2d864c5c0/go.mod h1:NejntDY71bxJaxqaZtRLmHc0nXq+ghnaoLXU4t9Y020=
 github.com/opendedup/sdfs-client-go v0.1.37-0.20210525014005-05973dce4ea4 h1:JJgreIAbMpeSblPRhf7ILtY4PzwoAg5fr9AflIuJhOg=
 github.com/opendedup/sdfs-client-go v0.1.37-0.20210525014005-05973dce4ea4/go.mod h1:k98L5R/pXrJgDNM4gVJKhyfvrqpQsGn58lGw9q0idtM=
+github.com/opendedup/sdfs-client-go v0.1.37-0.20210622175945-9de21ea2a6d9 h1:KtIb62VOmmpAooaESAGrYDGdSNYoSAjt0sxW8e0e6nE=
+github.com/opendedup/sdfs-client-go v0.1.37-0.20210622175945-9de21ea2a6d9/go.mod h1:k98L5R/pXrJgDNM4gVJKhyfvrqpQsGn58lGw9q0idtM=
 github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492/go.mod h1:Ngi6UdF0k5OKD5t5wlmGhe/EDKPoUM3BXZSSfIuJbis=
 github.com/opentracing/basictracer-go v1.0.0/go.mod h1:QfBfYuafItcjQuMwinw9GhYKwFXS9KnPs5lxoYwgW74=
 github.com/opentracing/opentracing-go v1.0.2/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
