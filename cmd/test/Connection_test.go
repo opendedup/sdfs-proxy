@@ -40,6 +40,7 @@ const (
 )
 
 func randBytesMaskImpr(n int) []byte {
+	log.Printf("Getting Random Data of size %d\n", n)
 	rand.Seed(time.Now().UTC().UnixNano())
 	b := make([]byte, n)
 	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
@@ -54,7 +55,7 @@ func randBytesMaskImpr(n int) []byte {
 		cache >>= letterIdxBits
 		remain--
 	}
-
+	log.Printf("Returning Random Data of size %d\n", n)
 	return b
 }
 
@@ -309,13 +310,28 @@ func TestTuncate(t *testing.T) {
 	connection := connect(t, false)
 	assert.NotNil(t, connection)
 	defer connection.CloseConnection(ctx)
-	fn, _ := makeFile(t, "", 1024, false)
+	fn, _ := makeFile(t, "", 1024*1024*1024*10, false)
 	err := connection.Truncate(ctx, fn, int64(0))
 	assert.Nil(t, err)
 	stat, err := connection.GetAttr(ctx, fn)
 	assert.Nil(t, err)
 	assert.Equal(t, stat.Size, int64(0))
 	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
+func TestWriteLargeBlock(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t, false)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	tMb := int64(1024 * 1024 * 10)
+	fMb := 1024 * 5
+	t.Logf("Writing file \n")
+	fn, _ := makeLargeBlockFile(t, "", tMb, false, fMb)
+	t.Logf("Wrote %s\n", fn)
+	err := connection.DeleteFile(ctx, fn)
 	assert.Nil(t, err)
 }
 
@@ -844,8 +860,9 @@ func TestMain(m *testing.M) {
 	rand.Seed(time.Now().UTC().UnixNano())
 	var cli *client.Client
 	var containername string
+	var err error
 	if runtime.GOOS != "windows" {
-		cli, err := client.NewClientWithOpts(client.FromEnv)
+		cli, err = client.NewClientWithOpts(client.FromEnv)
 		if err != nil {
 			fmt.Printf("Unable to create docker client %v", err)
 		}
@@ -973,7 +990,7 @@ func runContainer(client *client.Client, imagename string, containername string,
 
 func stopAndRemoveContainer(client *client.Client, containername string) error {
 	ctx := context.Background()
-
+	log.Printf("Stopping container %s", containername)
 	if err := client.ContainerStop(ctx, containername, nil); err != nil {
 		log.Printf("Unable to stop container %s: %s", containername, err)
 	}
@@ -1059,8 +1076,10 @@ func makeLargeBlockGenericFile(ctx context.Context, t *testing.T, connection *ap
 			blockSz = int(maxoffset - offset)
 		}
 		b := randBytesMaskImpr(blockSz)
+
 		err = connection.Write(ctx, fh, b, offset, int32(len(b)))
 		h.Write(b)
+		t.Logf("Wrote blocksize %d", len(b))
 		assert.Nil(t, err)
 		offset += int64(len(b))
 		b = nil
