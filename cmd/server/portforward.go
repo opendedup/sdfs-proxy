@@ -20,7 +20,6 @@ type ForwardEntry struct {
 	Lpwd         string `json:"local-auth"`
 	Address      string `json:"address" required:"true"`
 	DisableTrust bool   `json:"trust-all"`
-	TrustCert    bool   `json:"trust-cert"`
 	Mtls         bool   `json:"mtls"`
 	Mtlsca       string `json:"root-ca"`
 	Mtlskey      string `json:"mtls-key"`
