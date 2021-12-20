@@ -32,8 +32,8 @@ func main() {
 	mstls := flag.Bool("server-mtls", false, "Use MTLS for listening port. This will use the certs located in $HOME/.sdfs/keys/[server.crt,server.key,server.crt]"+
 		"unless otherwise specified")
 	smtlsca := flag.String("server-root-ca", "", "The path the CA cert used to sign the MTLS Cert. This defaults to $HOME/.sdfs/keys/ca.crt")
-	smtlskey := flag.String("server-mtls-key", "", "The path the private used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.key")
-	smtlscert := flag.String("server-mtls-cert", "", "The path the client cert used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.crt")
+	smtlskey := flag.String("server-mtls-key", "", "The path the private key used for mutual TLS. This defaults to $HOME/.sdfs/keys/server.key")
+	smtlscert := flag.String("server-mtls-cert", "", "The path the server cert used for mutual TLS. This defaults to $HOME/.sdfs/keys/server.crt")
 
 	mtls := flag.Bool("mtls", false, "Use Mutual TLS. This will use the certs located in $HOME/.sdfs/keys/[client.crt,client.key,ca.crt]"+
 		"unless otherwise specified")
