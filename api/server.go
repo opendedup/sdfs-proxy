@@ -2,18 +2,24 @@ package api
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
-	"log"
+	"io/ioutil"
 	"net"
+	"os/user"
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/dgrijalva/jwt-go"
-	pb "github.com/opendedup/sdfs-client-go/api"
 	sdfs "github.com/opendedup/sdfs-client-go/sdfs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -21,23 +27,39 @@ var server *grpc.Server
 var authenticate bool
 var password string
 var NOSHUTDOWN bool
+var ServerMtls bool
+var AnyCert bool
+var ServerTls bool
+var ServerKey string
+var ServerCACert string
+var ServerCert string
 
-func StartServer(Connection *pb.SdfsConnection, port string, enableAuth, dedupe, debug bool, pwd string) {
+func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]bool, debug bool, pwd string) {
 	password = pwd
 	authenticate = enableAuth
-	fc, err := NewFileIOProxy(Connection.Clnt, dedupe, debug)
+	fc, err := NewFileIOProxy(Connections, dedupe, debug)
 	if err != nil {
 		log.Fatalf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
 	}
-	vc := NewVolumeProxy(Connection.Clnt, pwd)
-	ec := NewEventProxy(Connection.Clnt)
+	vc := NewVolumeProxy(Connections, pwd)
+	ec := NewEventProxy(Connections)
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	maxMsgSize := 2097152 * 40
-	server = grpc.NewServer(grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
-		grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize))
+	if ServerTls || ServerMtls {
+		cc, err := LoadKeyPair(ServerMtls, AnyCert)
+		if err != nil {
+			log.Fatalf("failed to load certs: %v", err)
+		}
+		server = grpc.NewServer(grpc.Creds(*cc), grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
+			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize))
+	} else {
+		server = grpc.NewServer(grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
+			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize))
+	}
+
 	sdfs.RegisterVolumeServiceServer(server, vc)
 	sdfs.RegisterFileIOServiceServer(server, fc)
 	sdfs.RegisterSDFSEventServiceServer(server, ec)
@@ -49,10 +71,64 @@ func StartServer(Connection *pb.SdfsConnection, port string, enableAuth, dedupe,
 
 }
 
+func LoadKeyPair(mtls, anycert bool) (*credentials.TransportCredentials, error) {
+	user, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+	if len(ServerCert) == 0 {
+		ServerCert = user.HomeDir + "/.sdfs/server.crt"
+	}
+	if len(ServerKey) == 0 {
+		ServerKey = user.HomeDir + "/.sdfs/server.key"
+	}
+	if len(ServerCACert) == 0 {
+		ServerCACert = user.HomeDir + "/.sdfs/ca.crt"
+	}
+	certificate, err := tls.LoadX509KeyPair(ServerCert, ServerKey)
+	if err != nil {
+		return nil, err
+	}
+	tlsConfig := &tls.Config{
+		ClientAuth:   tls.NoClientCert,
+		Certificates: []tls.Certificate{certificate},
+	}
+	if mtls {
+
+		if anycert {
+			tlsConfig.ClientAuth = tls.RequireAnyClientCert
+		} else {
+			data, err := ioutil.ReadFile(ServerCACert)
+			if err != nil {
+				return nil, err
+			}
+			capool := x509.NewCertPool()
+			if !capool.AppendCertsFromPEM(data) {
+				return nil, err
+			}
+			tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+			tlsConfig.ClientCAs = capool
+
+		}
+
+	}
+	cr := credentials.NewTLS(tlsConfig)
+	return &cr, nil
+}
+
 func serverInterceptor(ctx context.Context,
 	req interface{},
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler) (interface{}, error) {
+	if AnyCert {
+		if p, ok := peer.FromContext(ctx); ok {
+			if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
+				for _, item := range mtls.State.PeerCertificates {
+					log.Debug("request certificate subject:", item.Subject)
+				}
+			}
+		}
+	}
 	if authenticate {
 		// Skip authorize when GetJWT is requested
 
@@ -71,6 +147,16 @@ func serverInterceptor(ctx context.Context,
 }
 
 func serverStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+
+	if AnyCert {
+		if p, ok := peer.FromContext(ss.Context()); ok {
+			if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
+				for _, item := range mtls.State.PeerCertificates {
+					log.Debug("request certificate subject:", item.Subject)
+				}
+			}
+		}
+	}
 	if authenticate {
 		if info.FullMethod != "/org.opendedup.grpc.VolumeService/AuthenticateUser" {
 			if err := authorize(ss.Context()); err != nil {

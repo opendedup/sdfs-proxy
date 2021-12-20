@@ -1,0 +1,14 @@
+{
+    "forwarders" : [
+        {
+            "address" : "sdfs://localhost:6442"
+        },
+        {
+            "address" : "sdfs://localhost:6443"
+        },
+        {
+            "address" : "sdfs://localhost:6444"
+        }
+
+    ]
+}

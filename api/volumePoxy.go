@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -18,8 +19,9 @@ type customClaims struct {
 
 type VolumeProxy struct {
 	spb.UnimplementedVolumeServiceServer
-	vc       spb.VolumeServiceClient
-	Clnt     *grpc.ClientConn
+	vc       map[int64]spb.VolumeServiceClient
+	dvc      int64
+	Clnt     map[int64]*grpc.ClientConn
 	password string
 }
 
@@ -46,12 +48,27 @@ func (s *VolumeProxy) AuthenticateUser(ctx context.Context, req *spb.Authenticat
 }
 
 func (s *VolumeProxy) SetMaxAge(ctx context.Context, req *spb.SetMaxAgeRequest) (*spb.SetMaxAgeResponse, error) {
-	return s.vc.SetMaxAge(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.SetMaxAge(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 }
 
 func (s *VolumeProxy) GetVolumeInfo(ctx context.Context, req *spb.VolumeInfoRequest) (*spb.VolumeInfoResponse, error) {
-	return s.vc.GetVolumeInfo(ctx, req)
-
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.GetVolumeInfo(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 }
 
 func (s *VolumeProxy) ShutdownVolume(ctx context.Context, req *spb.ShutdownRequest) (*spb.ShutdownResponse, error) {
@@ -61,56 +78,169 @@ func (s *VolumeProxy) ShutdownVolume(ctx context.Context, req *spb.ShutdownReque
 }
 
 func (s *VolumeProxy) CleanStore(ctx context.Context, req *spb.CleanStoreRequest) (*spb.CleanStoreResponse, error) {
-	return s.vc.CleanStore(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.CleanStore(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 
 func (s *VolumeProxy) DeleteCloudVolume(ctx context.Context, req *spb.DeleteCloudVolumeRequest) (*spb.DeleteCloudVolumeResponse, error) {
-	return s.vc.DeleteCloudVolume(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.DeleteCloudVolume(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 
 func (s *VolumeProxy) DSEInfo(ctx context.Context, req *spb.DSERequest) (*spb.DSEResponse, error) {
-	return s.vc.DSEInfo(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.DSEInfo(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 
 func (s *VolumeProxy) SystemInfo(ctx context.Context, req *spb.SystemInfoRequest) (*spb.SystemInfoResponse, error) {
-	return s.vc.SystemInfo(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.SystemInfo(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *VolumeProxy) SetVolumeCapacity(ctx context.Context, req *spb.SetVolumeCapacityRequest) (*spb.SetVolumeCapacityResponse, error) {
-	return s.vc.SetVolumeCapacity(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.SetVolumeCapacity(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *VolumeProxy) GetConnectedVolumes(ctx context.Context, req *spb.CloudVolumesRequest) (*spb.CloudVolumesResponse, error) {
-	return s.vc.GetConnectedVolumes(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.GetConnectedVolumes(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *VolumeProxy) GetGCSchedule(ctx context.Context, req *spb.GCScheduleRequest) (*spb.GCScheduleResponse, error) {
-	return s.vc.GetGCSchedule(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.GetGCSchedule(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *VolumeProxy) SetCacheSize(ctx context.Context, req *spb.SetCacheSizeRequest) (*spb.SetCacheSizeResponse, error) {
-	return s.vc.SetCacheSize(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.SetCacheSize(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 
 func (s *VolumeProxy) SetReadSpeed(ctx context.Context, req *spb.SpeedRequest) (*spb.SpeedResponse, error) {
-	return s.vc.SetReadSpeed(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.SetReadSpeed(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *VolumeProxy) SetWriteSpeed(ctx context.Context, req *spb.SpeedRequest) (*spb.SpeedResponse, error) {
-	return s.vc.SetWriteSpeed(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.SetWriteSpeed(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *VolumeProxy) SyncFromCloudVolume(ctx context.Context, req *spb.SyncFromVolRequest) (*spb.SyncFromVolResponse, error) {
-	return s.vc.SyncFromCloudVolume(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.SyncFromCloudVolume(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *VolumeProxy) SyncCloudVolume(ctx context.Context, req *spb.SyncVolRequest) (*spb.SyncVolResponse, error) {
-	return s.vc.SyncCloudVolume(ctx, req)
+	volid := req.PvolumeID
+	if volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.SyncCloudVolume(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
+}
+
+func (s *VolumeProxy) GetProxyVolumes(ctx context.Context, req *spb.ProxyVolumeInfoRequest) (*spb.ProxyVolumeInfoResponse, error) {
+
+	var vis []*spb.VolumeInfoResponse
+	for id, con := range s.vc {
+
+		vi, err := con.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{})
+		if err != nil {
+			log.Errorf("Error connecting to volume %d error:%v", id, err)
+		} else if id != vi.SerialNumber {
+			log.Warnf("Returned Volume Serial Number %d does not match locally recored %d\n", vi.SerialNumber, id)
+		} else {
+			vis = append(vis, vi)
+		}
+	}
+	return &spb.ProxyVolumeInfoResponse{VolumeInfoResponse: vis}, nil
 }
 
 func (s *VolumeProxy) shutdown() {
@@ -123,9 +253,15 @@ func (s *VolumeProxy) shutdown() {
 
 }
 
-func NewVolumeProxy(clnt *grpc.ClientConn, password string) *VolumeProxy {
-	vc := spb.NewVolumeServiceClient(clnt)
-	sc := &VolumeProxy{vc: vc, Clnt: clnt, password: password}
+func NewVolumeProxy(clnts map[int64]*grpc.ClientConn, password string) *VolumeProxy {
+	vcm := make(map[int64]spb.VolumeServiceClient)
+	var defaultVolume int64
+	for indx, clnt := range clnts {
+		vc := spb.NewVolumeServiceClient(clnt)
+		vcm[indx] = vc
+		defaultVolume = indx
+	}
+	sc := &VolumeProxy{vc: vcm, Clnt: clnts, password: password, dvc: defaultVolume}
 	return sc
 
 }
