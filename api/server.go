@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -19,7 +20,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -97,6 +97,7 @@ func LoadKeyPair(mtls, anycert bool) (*credentials.TransportCredentials, error) 
 
 		if anycert {
 			tlsConfig.ClientAuth = tls.RequireAnyClientCert
+			tlsConfig.VerifyPeerCertificate = customVerify
 		} else {
 			data, err := ioutil.ReadFile(ServerCACert)
 			if err != nil {
@@ -116,19 +117,28 @@ func LoadKeyPair(mtls, anycert bool) (*credentials.TransportCredentials, error) 
 	return &cr, nil
 }
 
+func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	for i := 0; i < len(rawCerts); i++ {
+		cert, err := x509.ParseCertificate(rawCerts[i])
+
+		if err != nil {
+			log.Error("Error: ", err)
+			continue
+		}
+
+		hash := sha256.Sum256(rawCerts[i])
+		log.Infof("Fingerprint: %x\n\n", hash)
+
+		log.Info(hash, cert.DNSNames, cert.Subject)
+	}
+	return nil
+}
+
 func serverInterceptor(ctx context.Context,
 	req interface{},
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler) (interface{}, error) {
-	if AnyCert {
-		if p, ok := peer.FromContext(ctx); ok {
-			if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
-				for _, item := range mtls.State.PeerCertificates {
-					log.Debug("request certificate subject:", item.Subject)
-				}
-			}
-		}
-	}
+
 	if authenticate {
 		// Skip authorize when GetJWT is requested
 
@@ -148,15 +158,6 @@ func serverInterceptor(ctx context.Context,
 
 func serverStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 
-	if AnyCert {
-		if p, ok := peer.FromContext(ss.Context()); ok {
-			if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
-				for _, item := range mtls.State.PeerCertificates {
-					log.Debug("request certificate subject:", item.Subject)
-				}
-			}
-		}
-	}
 	if authenticate {
 		if info.FullMethod != "/org.opendedup.grpc.VolumeService/AuthenticateUser" {
 			if err := authorize(ss.Context()); err != nil {

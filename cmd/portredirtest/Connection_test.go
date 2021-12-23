@@ -804,17 +804,8 @@ func Benchmark32Write(b *testing.B) {
 
 }
 
-func runWriteTst(b *testing.B, wg *sync.WaitGroup, direct bool) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	var connection *api.SdfsConnection
-	if direct {
-		connection = dconnect(b)
-	} else {
-		connection = gconnect(b, false, -1)
-	}
+func runWriteTst(ctx context.Context, connection *api.SdfsConnection, b *testing.B, wg *sync.WaitGroup, direct bool) {
 
-	defer connection.CloseConnection(ctx)
 	fn := string(randBytesMaskImpr(16))
 	connection.MkNod(ctx, fn, 511, 0)
 	connection.GetAttr(ctx, fn)
@@ -831,22 +822,29 @@ func runWriteTst(b *testing.B, wg *sync.WaitGroup, direct bool) {
 	connection.Unlink(ctx, fn)
 	wg.Done()
 }
-func Benchmark32PWrite(b *testing.B) {
 
+func Benchmark32PWrite(b *testing.B) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := gconnect(b, false, -1)
+	defer connection.CloseConnection(ctx)
 	wg := &sync.WaitGroup{}
 	wg.Add(b.N)
 	for i := 0; i < b.N; i++ {
-		go runWriteTst(b, wg, false)
+		go runWriteTst(ctx, connection, b, wg, false)
 	}
 	wg.Wait()
 
 }
 func Benchmark32PDWrite(b *testing.B) {
-
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := dconnect(b)
+	defer connection.CloseConnection(ctx)
 	wg := &sync.WaitGroup{}
 	wg.Add(8)
 	for i := 0; i < 8; i++ {
-		go runWriteTst(b, wg, true)
+		go runWriteTst(ctx, connection, b, wg, true)
 	}
 	wg.Wait()
 
@@ -1375,22 +1373,38 @@ func gconnect(b *testing.B, dedupe bool, volumeid int64) *api.SdfsConnection {
 		api.MtlsKey = "out/client_key.key"
 	}
 
-	connection, err := api.NewConnection(address, dedupe, volumeid)
-	if err != nil {
-		b.Errorf("Unable to connect to %s error: %v\n", address, err)
-		return nil
+	connection, err := api.NewConnection(address, false, -1)
+	retrys := 0
+	for err != nil {
+		log.Printf("retries = %d", retrys)
+		time.Sleep(20 * time.Second)
+		connection, err = api.NewConnection(address, false, -1)
+		if retrys > 10 {
+			fmt.Printf("SDFS Server connection timed out %s\n", address)
+			os.Exit(-1)
+		} else {
+			retrys++
+		}
 	}
 	return connection
 }
 
 func dconnect(b *testing.B) *api.SdfsConnection {
-
 	var address = "sdfss://localhost:6443"
 
 	connection, err := api.NewConnection(address, false, -1)
-	if err != nil {
-		b.Errorf("Unable to connect to %s error: %v\n", address, err)
-		return nil
+	retrys := 0
+	for err != nil {
+		log.Printf("retries = %d", retrys)
+		time.Sleep(20 * time.Second)
+		connection, err = api.NewConnection(address, false, -1)
+		if retrys > 10 {
+			fmt.Printf("SDFS Server connection timed out %s\n", address)
+			os.Exit(-1)
+		} else {
+			retrys++
+		}
 	}
+
 	return connection
 }
