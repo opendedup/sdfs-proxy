@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -19,10 +20,12 @@ type customClaims struct {
 
 type VolumeProxy struct {
 	spb.UnimplementedVolumeServiceServer
-	vc       map[int64]spb.VolumeServiceClient
-	dvc      int64
-	Clnt     map[int64]*grpc.ClientConn
-	password string
+	vc         map[int64]spb.VolumeServiceClient
+	dvc        int64
+	Clnt       map[int64]*grpc.ClientConn
+	password   string
+	proxy      bool
+	configLock sync.RWMutex
 }
 
 func (s *VolumeProxy) AuthenticateUser(ctx context.Context, req *spb.AuthenticationRequest) (*spb.AuthenticationResponse, error) {
@@ -49,7 +52,9 @@ func (s *VolumeProxy) AuthenticateUser(ctx context.Context, req *spb.Authenticat
 
 func (s *VolumeProxy) SetMaxAge(ctx context.Context, req *spb.SetMaxAgeRequest) (*spb.SetMaxAgeResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -61,7 +66,9 @@ func (s *VolumeProxy) SetMaxAge(ctx context.Context, req *spb.SetMaxAgeRequest) 
 
 func (s *VolumeProxy) GetVolumeInfo(ctx context.Context, req *spb.VolumeInfoRequest) (*spb.VolumeInfoResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -79,7 +86,9 @@ func (s *VolumeProxy) ShutdownVolume(ctx context.Context, req *spb.ShutdownReque
 
 func (s *VolumeProxy) CleanStore(ctx context.Context, req *spb.CleanStoreRequest) (*spb.CleanStoreResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -92,7 +101,9 @@ func (s *VolumeProxy) CleanStore(ctx context.Context, req *spb.CleanStoreRequest
 
 func (s *VolumeProxy) DeleteCloudVolume(ctx context.Context, req *spb.DeleteCloudVolumeRequest) (*spb.DeleteCloudVolumeResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -105,7 +116,9 @@ func (s *VolumeProxy) DeleteCloudVolume(ctx context.Context, req *spb.DeleteClou
 
 func (s *VolumeProxy) DSEInfo(ctx context.Context, req *spb.DSERequest) (*spb.DSEResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -118,7 +131,9 @@ func (s *VolumeProxy) DSEInfo(ctx context.Context, req *spb.DSERequest) (*spb.DS
 
 func (s *VolumeProxy) SystemInfo(ctx context.Context, req *spb.SystemInfoRequest) (*spb.SystemInfoResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -130,7 +145,9 @@ func (s *VolumeProxy) SystemInfo(ctx context.Context, req *spb.SystemInfoRequest
 }
 func (s *VolumeProxy) SetVolumeCapacity(ctx context.Context, req *spb.SetVolumeCapacityRequest) (*spb.SetVolumeCapacityResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -142,7 +159,9 @@ func (s *VolumeProxy) SetVolumeCapacity(ctx context.Context, req *spb.SetVolumeC
 }
 func (s *VolumeProxy) GetConnectedVolumes(ctx context.Context, req *spb.CloudVolumesRequest) (*spb.CloudVolumesResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -154,7 +173,9 @@ func (s *VolumeProxy) GetConnectedVolumes(ctx context.Context, req *spb.CloudVol
 }
 func (s *VolumeProxy) GetGCSchedule(ctx context.Context, req *spb.GCScheduleRequest) (*spb.GCScheduleResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -166,7 +187,9 @@ func (s *VolumeProxy) GetGCSchedule(ctx context.Context, req *spb.GCScheduleRequ
 }
 func (s *VolumeProxy) SetCacheSize(ctx context.Context, req *spb.SetCacheSizeRequest) (*spb.SetCacheSizeResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -179,7 +202,9 @@ func (s *VolumeProxy) SetCacheSize(ctx context.Context, req *spb.SetCacheSizeReq
 
 func (s *VolumeProxy) SetReadSpeed(ctx context.Context, req *spb.SpeedRequest) (*spb.SpeedResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -191,7 +216,9 @@ func (s *VolumeProxy) SetReadSpeed(ctx context.Context, req *spb.SpeedRequest) (
 }
 func (s *VolumeProxy) SetWriteSpeed(ctx context.Context, req *spb.SpeedRequest) (*spb.SpeedResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -203,7 +230,9 @@ func (s *VolumeProxy) SetWriteSpeed(ctx context.Context, req *spb.SpeedRequest) 
 }
 func (s *VolumeProxy) SyncFromCloudVolume(ctx context.Context, req *spb.SyncFromVolRequest) (*spb.SyncFromVolResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -215,7 +244,9 @@ func (s *VolumeProxy) SyncFromCloudVolume(ctx context.Context, req *spb.SyncFrom
 }
 func (s *VolumeProxy) SyncCloudVolume(ctx context.Context, req *spb.SyncVolRequest) (*spb.SyncVolResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dvc
 	}
 	if val, ok := s.vc[volid]; ok {
@@ -253,7 +284,9 @@ func (s *VolumeProxy) shutdown() {
 
 }
 
-func NewVolumeProxy(clnts map[int64]*grpc.ClientConn, password string) *VolumeProxy {
+func (s *VolumeProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, debug bool) error {
+	s.configLock.Lock()
+	defer s.configLock.Unlock()
 	vcm := make(map[int64]spb.VolumeServiceClient)
 	var defaultVolume int64
 	for indx, clnt := range clnts {
@@ -261,7 +294,20 @@ func NewVolumeProxy(clnts map[int64]*grpc.ClientConn, password string) *VolumePr
 		vcm[indx] = vc
 		defaultVolume = indx
 	}
-	sc := &VolumeProxy{vc: vcm, Clnt: clnts, password: password, dvc: defaultVolume}
+	s.vc = vcm
+	s.dvc = defaultVolume
+	return nil
+}
+
+func NewVolumeProxy(clnts map[int64]*grpc.ClientConn, password string, proxy bool) *VolumeProxy {
+	vcm := make(map[int64]spb.VolumeServiceClient)
+	var defaultVolume int64
+	for indx, clnt := range clnts {
+		vc := spb.NewVolumeServiceClient(clnt)
+		vcm[indx] = vc
+		defaultVolume = indx
+	}
+	sc := &VolumeProxy{vc: vcm, Clnt: clnts, password: password, dvc: defaultVolume, proxy: proxy}
 	return sc
 
 }

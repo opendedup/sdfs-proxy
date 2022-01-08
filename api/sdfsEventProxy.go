@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	"google.golang.org/grpc"
@@ -10,13 +11,17 @@ import (
 
 type SDFSEventProxy struct {
 	spb.UnimplementedSDFSEventServiceServer
-	evt  map[int64]spb.SDFSEventServiceClient
-	devt int64
+	evt        map[int64]spb.SDFSEventServiceClient
+	devt       int64
+	proxy      bool
+	configLock sync.RWMutex
 }
 
 func (s *SDFSEventProxy) GetEvent(ctx context.Context, req *spb.SDFSEventRequest) (*spb.SDFSEventResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.devt
 	}
 	if val, ok := s.evt[volid]; ok {
@@ -28,7 +33,9 @@ func (s *SDFSEventProxy) GetEvent(ctx context.Context, req *spb.SDFSEventRequest
 
 func (s *SDFSEventProxy) ListEvents(ctx context.Context, req *spb.SDFSEventListRequest) (*spb.SDFSEventListResponse, error) {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.devt
 	}
 	if val, ok := s.evt[volid]; ok {
@@ -41,7 +48,9 @@ func (s *SDFSEventProxy) ListEvents(ctx context.Context, req *spb.SDFSEventListR
 
 func (s *SDFSEventProxy) SubscribeEvent(req *spb.SDFSEventRequest, stream spb.SDFSEventService_SubscribeEventServer) error {
 	volid := req.PvolumeID
-	if volid == 0 || volid == -1 {
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.devt
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -66,7 +75,9 @@ func (s *SDFSEventProxy) SubscribeEvent(req *spb.SDFSEventRequest, stream spb.SD
 	}
 }
 
-func NewEventProxy(clnts map[int64]*grpc.ClientConn) *SDFSEventProxy {
+func (s *SDFSEventProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, debug bool) error {
+	s.configLock.Lock()
+	defer s.configLock.Unlock()
 	vcm := make(map[int64]spb.SDFSEventServiceClient)
 	var defaultVolume int64
 	for indx, clnt := range clnts {
@@ -74,7 +85,20 @@ func NewEventProxy(clnts map[int64]*grpc.ClientConn) *SDFSEventProxy {
 		vcm[indx] = evt
 		defaultVolume = indx
 	}
-	sc := &SDFSEventProxy{evt: vcm, devt: defaultVolume}
+	s.evt = vcm
+	s.devt = defaultVolume
+	return nil
+}
+
+func NewEventProxy(clnts map[int64]*grpc.ClientConn, proxy bool) *SDFSEventProxy {
+	vcm := make(map[int64]spb.SDFSEventServiceClient)
+	var defaultVolume int64
+	for indx, clnt := range clnts {
+		evt := spb.NewSDFSEventServiceClient(clnt)
+		vcm[indx] = evt
+		defaultVolume = indx
+	}
+	sc := &SDFSEventProxy{evt: vcm, devt: defaultVolume, proxy: proxy}
 	return sc
 
 }

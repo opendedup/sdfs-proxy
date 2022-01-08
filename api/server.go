@@ -34,15 +34,21 @@ var ServerKey string
 var ServerCACert string
 var ServerCert string
 
-func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]bool, debug bool, pwd string) {
+func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]bool, proxy, debug bool, pwd string, pr *PortRedictor) {
 	password = pwd
 	authenticate = enableAuth
-	fc, err := NewFileIOProxy(Connections, dedupe, debug)
+	fc, err := NewFileIOProxy(Connections, dedupe, proxy, debug)
 	if err != nil {
 		log.Fatalf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
 	}
-	vc := NewVolumeProxy(Connections, pwd)
-	ec := NewEventProxy(Connections)
+	vc := NewVolumeProxy(Connections, pwd, proxy)
+	ec := NewEventProxy(Connections, proxy)
+	if pr != nil {
+		pr.iop = fc
+		pr.ep = ec
+		pr.vp = vc
+	}
+
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
@@ -63,6 +69,9 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	sdfs.RegisterVolumeServiceServer(server, vc)
 	sdfs.RegisterFileIOServiceServer(server, fc)
 	sdfs.RegisterSDFSEventServiceServer(server, ec)
+	if pr != nil {
+		sdfs.RegisterPortRedirectorServiceServer(server, pr)
+	}
 	fmt.Printf("Listening on %s auth enabled %v, dedupe enabled %v\n", port, enableAuth, dedupe)
 	fmt.Println("proxy ready")
 	if err := server.Serve(lis); err != nil {

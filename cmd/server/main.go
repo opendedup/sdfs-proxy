@@ -142,13 +142,13 @@ func main() {
 			dd := make(map[int64]bool)
 			dd[Connection.Volumeid] = *dedupe
 
-			api.StartServer(cmp, *port, enableAuth, dd, *debug, *lpwd)
+			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil)
 		} else {
 			cmp := make(map[int64]*grpc.ClientConn)
 			cmp[Connection.Volumeid] = Connection.Clnt
 			dd := make(map[int64]bool)
 			dd[Connection.Volumeid] = *dedupe
-			api.StartServer(cmp, *port, enableAuth, dd, *debug, *lpwd)
+			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil)
 		}
 	}
 

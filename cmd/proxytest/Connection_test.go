@@ -766,7 +766,7 @@ func TestMain(m *testing.M) {
 		cmp[connection.Volumeid] = connection.Clnt
 		dd := make(map[int64]bool)
 		dd[connection.Volumeid] = true
-		go paip.StartServer(cmp, port, true, dd, false, password)
+		go paip.StartServer(cmp, port, true, dd, true, false, password)
 	}
 	fmt.Printf("Server initialized at %s\n", port)
 	code := m.Run()
