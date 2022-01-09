@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"sync"
 
 	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
@@ -11,210 +13,551 @@ import (
 
 type FileIOProxy struct {
 	spb.UnimplementedFileIOServiceServer
-	fc            spb.FileIOServiceClient
-	dedupe        *dedupe.DedupeEngine
-	dedupeEnabled bool
+	fc            map[int64]spb.FileIOServiceClient
+	dfc           int64
+	proxy         bool
+	dedupe        map[int64]*dedupe.DedupeEngine
+	dedupeEnabled map[int64]bool
+	configLock    sync.RWMutex
 }
 
 func (s *FileIOProxy) GetXAttrSize(ctx context.Context, req *spb.GetXAttrSizeRequest) (*spb.GetXAttrSizeResponse, error) {
-	return s.fc.GetXAttrSize(ctx, req)
-
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.GetXAttrSize(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 }
 
 func (s *FileIOProxy) Fsync(ctx context.Context, req *spb.FsyncRequest) (*spb.FsyncResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.SyncFile(req.Path)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.Fsync(ctx, req)
-
+	if s.dedupeEnabled[volid] {
+		s.dedupe[volid].SyncFile(req.Path)
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.Fsync(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 }
 
 func (s *FileIOProxy) SetXAttr(ctx context.Context, req *spb.SetXAttrRequest) (*spb.SetXAttrResponse, error) {
-	return s.fc.SetXAttr(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.SetXAttr(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 
 func (s *FileIOProxy) RemoveXAttr(ctx context.Context, req *spb.RemoveXAttrRequest) (*spb.RemoveXAttrResponse, error) {
-	return s.fc.RemoveXAttr(ctx, req)
-
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.RemoveXAttr(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 }
 
 func (s *FileIOProxy) GetXAttr(ctx context.Context, req *spb.GetXAttrRequest) (*spb.GetXAttrResponse, error) {
-	return s.fc.GetXAttr(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.GetXAttr(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 
 func (s *FileIOProxy) Utime(ctx context.Context, req *spb.UtimeRequest) (*spb.UtimeResponse, error) {
-	return s.fc.Utime(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.Utime(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 }
 
 func (s *FileIOProxy) Truncate(ctx context.Context, req *spb.TruncateRequest) (*spb.TruncateResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.SyncFile(req.Path)
+	volid := req.PvolumeID
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.Truncate(ctx, req)
+	if val, ok := s.fc[volid]; ok {
+		if dval, ok := s.dedupe[volid]; ok {
+			dval.SyncFile(req.Path)
+		}
+
+		return val.Truncate(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) SymLink(ctx context.Context, req *spb.SymLinkRequest) (*spb.SymLinkResponse, error) {
-	return s.fc.SymLink(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.SymLink(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) GetAttr(ctx context.Context, req *spb.StatRequest) (*spb.StatResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.SyncFile(req.Path)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.GetAttr(ctx, req)
+	if s.dedupeEnabled[volid] {
+		s.dedupe[volid].SyncFile(req.Path)
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.GetAttr(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 
 func (s *FileIOProxy) ReadLink(ctx context.Context, req *spb.LinkRequest) (*spb.LinkResponse, error) {
-	return s.fc.ReadLink(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.ReadLink(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 }
 
 func (s *FileIOProxy) Flush(ctx context.Context, req *spb.FlushRequest) (*spb.FlushResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.Sync(req.Fd)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.Flush(ctx, req)
+	if s.dedupeEnabled[volid] {
+		s.dedupe[volid].Sync(req.Fd)
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.Flush(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) Chown(ctx context.Context, req *spb.ChownRequest) (*spb.ChownResponse, error) {
-	return s.fc.Chown(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.Chown(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) MkDir(ctx context.Context, req *spb.MkDirRequest) (*spb.MkDirResponse, error) {
-	return s.fc.MkDir(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.MkDir(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) RmDir(ctx context.Context, req *spb.RmDirRequest) (*spb.RmDirResponse, error) {
-	return s.fc.RmDir(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.RmDir(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) Unlink(ctx context.Context, req *spb.UnlinkRequest) (*spb.UnlinkResponse, error) {
-	return s.fc.Unlink(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.Unlink(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 
 func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*spb.DataWriteResponse, error) {
-	if s.dedupeEnabled {
-		err := s.dedupe.Write(req.FileHandle, req.Start, req.Data, req.Len)
-		if err != nil {
-			return nil, err
-		} else {
-			return &spb.DataWriteResponse{}, nil
-		}
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.Write(ctx, req)
+	if val, ok := s.fc[volid]; ok {
+		if dval, ok := s.dedupe[volid]; ok {
+			err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len)
+			if err != nil {
+				return nil, err
+			} else {
+				return &spb.DataWriteResponse{}, nil
+			}
+		}
+		return val.Write(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 }
 func (s *FileIOProxy) Read(ctx context.Context, req *spb.DataReadRequest) (*spb.DataReadResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.Sync(req.FileHandle)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.Read(ctx, req)
+	if val, ok := s.fc[volid]; ok {
+		if dval, ok := s.dedupe[volid]; ok {
+			dval.Sync(req.FileHandle)
+		}
+		return val.Read(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) Release(ctx context.Context, req *spb.FileCloseRequest) (*spb.FileCloseResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.Close(req.FileHandle)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.Release(ctx, req)
+	if val, ok := s.fc[volid]; ok {
+		if dval, ok := s.dedupe[volid]; ok {
+			dval.Close(req.FileHandle)
+		}
+		return val.Release(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) Mknod(ctx context.Context, req *spb.MkNodRequest) (*spb.MkNodResponse, error) {
-	return s.fc.Mknod(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.Mknod(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) Open(ctx context.Context, req *spb.FileOpenRequest) (*spb.FileOpenResponse, error) {
-	rsp, err := s.fc.Open(ctx, req)
-	if err != nil {
-		return rsp, err
-	} else if rsp.ErrorCode > 0 {
-		return rsp, err
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	if s.dedupeEnabled {
-		s.dedupe.Open(req.Path, rsp.FileHandle)
+	if val, ok := s.fc[volid]; ok {
+		rsp, err := val.Open(ctx, req)
+		if err != nil {
+			return rsp, err
+		} else if rsp.ErrorCode > 0 {
+			return rsp, err
+		}
+		if dval, ok := s.dedupe[volid]; ok {
+			dval.Open(req.Path, rsp.FileHandle)
+		}
+		return rsp, nil
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
-	return rsp, nil
 
 }
 func (s *FileIOProxy) GetFileInfo(ctx context.Context, req *spb.FileInfoRequest) (*spb.FileMessageResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.SyncFile(req.FileName)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.GetFileInfo(ctx, req)
+	if val, ok := s.fc[volid]; ok {
+		if dval, ok := s.dedupe[volid]; ok {
+			dval.SyncFile(req.FileName)
+		}
+		return val.GetFileInfo(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) CreateCopy(ctx context.Context, req *spb.FileSnapshotRequest) (*spb.FileSnapshotResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.SyncFile(req.Src)
-		s.dedupe.SyncFile(req.Dest)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.CreateCopy(ctx, req)
+	if val, ok := s.fc[volid]; ok {
+		if dval, ok := s.dedupe[volid]; ok {
+			dval.SyncFile(req.Src)
+			dval.SyncFile(req.Dest)
+		}
+		return val.CreateCopy(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) FileExists(ctx context.Context, req *spb.FileExistsRequest) (*spb.FileExistsResponse, error) {
-	return s.fc.FileExists(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.FileExists(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) MkDirAll(ctx context.Context, req *spb.MkDirRequest) (*spb.MkDirResponse, error) {
-	return s.fc.MkDirAll(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.MkDirAll(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) Stat(ctx context.Context, req *spb.FileInfoRequest) (*spb.FileMessageResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.SyncFile(req.FileName)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.Stat(ctx, req)
+	if val, ok := s.fc[volid]; ok {
+		if dval, ok := s.dedupe[volid]; ok {
+			dval.SyncFile(req.FileName)
+		}
+		return val.Stat(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) Rename(ctx context.Context, req *spb.FileRenameRequest) (*spb.FileRenameResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.CloseFile(req.Src)
-		s.dedupe.CloseFile(req.Dest)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.Rename(ctx, req)
+	if val, ok := s.fc[volid]; ok {
+		if dval, ok := s.dedupe[volid]; ok {
+			dval.CloseFile(req.Src)
+			dval.CloseFile(req.Dest)
+		}
+		return val.Rename(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) CopyExtent(ctx context.Context, req *spb.CopyExtentRequest) (*spb.CopyExtentResponse, error) {
-	if s.dedupeEnabled {
-		s.dedupe.SyncFile(req.SrcFile)
-		s.dedupe.SyncFile(req.DstFile)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
 	}
-	return s.fc.CopyExtent(ctx, req)
+	if val, ok := s.fc[volid]; ok {
+		if dval, ok := s.dedupe[volid]; ok {
+			dval.SyncFile(req.SrcFile)
+			dval.SyncFile(req.DstFile)
+		}
+		return val.CopyExtent(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) SetUserMetaData(ctx context.Context, req *spb.SetUserMetaDataRequest) (*spb.SetUserMetaDataResponse, error) {
-	return s.fc.SetUserMetaData(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.SetUserMetaData(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) GetCloudFile(ctx context.Context, req *spb.GetCloudFileRequest) (*spb.GetCloudFileResponse, error) {
-	return s.fc.GetCloudFile(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.GetCloudFile(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) GetCloudMetaFile(ctx context.Context, req *spb.GetCloudFileRequest) (*spb.GetCloudFileResponse, error) {
-	return s.fc.GetCloudFile(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.GetCloudFile(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 func (s *FileIOProxy) StatFS(ctx context.Context, req *spb.StatFSRequest) (*spb.StatFSResponse, error) {
-
-	return s.fc.StatFS(ctx, req)
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.StatFS(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
 
 }
 
-func NewFileIOProxy(clnt *grpc.ClientConn, dedupeEnabled, debug bool) (*FileIOProxy, error) {
-	fc := spb.NewFileIOServiceClient(clnt)
-	sc := &FileIOProxy{fc: fc, dedupeEnabled: dedupeEnabled}
-
-	if dedupeEnabled {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug)
-		if err != nil {
-			log.Printf("error initializing dedupe connection: %v\n", err)
-			return nil, err
+func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, debug bool) error {
+	s.configLock.Lock()
+	defer s.configLock.Unlock()
+	fcm := make(map[int64]spb.FileIOServiceClient)
+	dd := make(map[int64]*dedupe.DedupeEngine)
+	var defaultVolume int64
+	for indx, clnt := range clnts {
+		vc := spb.NewFileIOServiceClient(clnt)
+		fcm[indx] = vc
+		if dedupeEnabled[indx] {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, indx)
+			if err != nil {
+				log.Printf("error initializing dedupe connection: %v\n", err)
+				return err
+			}
+			dd[indx] = de
+			defaultVolume = indx
 		}
-		sc.dedupe = de
 	}
+	s.dfc = defaultVolume
+	s.dedupe = dd
+	s.fc = fcm
+	return nil
+}
+
+func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, proxy, debug bool) (*FileIOProxy, error) {
+	fcm := make(map[int64]spb.FileIOServiceClient)
+	dd := make(map[int64]*dedupe.DedupeEngine)
+	var defaultVolume int64
+	for indx, clnt := range clnts {
+		vc := spb.NewFileIOServiceClient(clnt)
+		fcm[indx] = vc
+		if dedupeEnabled[indx] {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, indx)
+			if err != nil {
+				log.Printf("error initializing dedupe connection: %v\n", err)
+				return nil, err
+			}
+			dd[indx] = de
+			defaultVolume = indx
+		}
+	}
+	sc := &FileIOProxy{fc: fcm, dedupeEnabled: dedupeEnabled, dedupe: dd, dfc: defaultVolume, proxy: proxy}
 	return sc, nil
 
 }

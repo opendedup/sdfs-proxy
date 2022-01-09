@@ -2,17 +2,23 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
-	"log"
+	"io/ioutil"
 	"net"
+	"os/user"
 	"strings"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/dgrijalva/jwt-go"
-	pb "github.com/opendedup/sdfs-client-go/api"
 	sdfs "github.com/opendedup/sdfs-client-go/sdfs"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
@@ -21,25 +27,51 @@ var server *grpc.Server
 var authenticate bool
 var password string
 var NOSHUTDOWN bool
+var ServerMtls bool
+var AnyCert bool
+var ServerTls bool
+var ServerKey string
+var ServerCACert string
+var ServerCert string
 
-func StartServer(Connection *pb.SdfsConnection, port string, enableAuth, dedupe, debug bool, pwd string) {
+func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]bool, proxy, debug bool, pwd string, pr *PortRedictor) {
 	password = pwd
 	authenticate = enableAuth
-	fc, err := NewFileIOProxy(Connection.Clnt, dedupe, debug)
+	fc, err := NewFileIOProxy(Connections, dedupe, proxy, debug)
 	if err != nil {
 		log.Fatalf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
 	}
-	vc := NewVolumeProxy(Connection.Clnt, pwd)
-	ec := NewEventProxy(Connection.Clnt)
+	vc := NewVolumeProxy(Connections, pwd, proxy)
+	ec := NewEventProxy(Connections, proxy)
+	if pr != nil {
+		pr.iop = fc
+		pr.ep = ec
+		pr.vp = vc
+	}
+
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	server = grpc.NewServer(grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
-		grpc.MaxRecvMsgSize(2097152*40))
+	maxMsgSize := 2097152 * 40
+	if ServerTls || ServerMtls {
+		cc, err := LoadKeyPair(ServerMtls, AnyCert)
+		if err != nil {
+			log.Fatalf("failed to load certs: %v", err)
+		}
+		server = grpc.NewServer(grpc.Creds(*cc), grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
+			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize))
+	} else {
+		server = grpc.NewServer(grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
+			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize))
+	}
+
 	sdfs.RegisterVolumeServiceServer(server, vc)
 	sdfs.RegisterFileIOServiceServer(server, fc)
 	sdfs.RegisterSDFSEventServiceServer(server, ec)
+	if pr != nil {
+		sdfs.RegisterPortRedirectorServiceServer(server, pr)
+	}
 	fmt.Printf("Listening on %s auth enabled %v, dedupe enabled %v\n", port, enableAuth, dedupe)
 	fmt.Println("proxy ready")
 	if err := server.Serve(lis); err != nil {
@@ -48,10 +80,74 @@ func StartServer(Connection *pb.SdfsConnection, port string, enableAuth, dedupe,
 
 }
 
+func LoadKeyPair(mtls, anycert bool) (*credentials.TransportCredentials, error) {
+	user, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+	if len(ServerCert) == 0 {
+		ServerCert = user.HomeDir + "/.sdfs/server.crt"
+	}
+	if len(ServerKey) == 0 {
+		ServerKey = user.HomeDir + "/.sdfs/server.key"
+	}
+	if len(ServerCACert) == 0 {
+		ServerCACert = user.HomeDir + "/.sdfs/ca.crt"
+	}
+	certificate, err := tls.LoadX509KeyPair(ServerCert, ServerKey)
+	if err != nil {
+		return nil, err
+	}
+	tlsConfig := &tls.Config{
+		ClientAuth:   tls.NoClientCert,
+		Certificates: []tls.Certificate{certificate},
+	}
+	if mtls {
+
+		if anycert {
+			tlsConfig.ClientAuth = tls.RequireAnyClientCert
+			tlsConfig.VerifyPeerCertificate = customVerify
+		} else {
+			data, err := ioutil.ReadFile(ServerCACert)
+			if err != nil {
+				return nil, err
+			}
+			capool := x509.NewCertPool()
+			if !capool.AppendCertsFromPEM(data) {
+				return nil, err
+			}
+			tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+			tlsConfig.ClientCAs = capool
+
+		}
+
+	}
+	cr := credentials.NewTLS(tlsConfig)
+	return &cr, nil
+}
+
+func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	for i := 0; i < len(rawCerts); i++ {
+		cert, err := x509.ParseCertificate(rawCerts[i])
+
+		if err != nil {
+			log.Error("Error: ", err)
+			continue
+		}
+
+		hash := sha256.Sum256(rawCerts[i])
+		log.Infof("Fingerprint: %x", hash)
+
+		log.Info(cert.DNSNames, cert.Subject)
+	}
+	return nil
+}
+
 func serverInterceptor(ctx context.Context,
 	req interface{},
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler) (interface{}, error) {
+
 	if authenticate {
 		// Skip authorize when GetJWT is requested
 
@@ -70,6 +166,7 @@ func serverInterceptor(ctx context.Context,
 }
 
 func serverStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+
 	if authenticate {
 		if info.FullMethod != "/org.opendedup.grpc.VolumeService/AuthenticateUser" {
 			if err := authorize(ss.Context()); err != nil {
