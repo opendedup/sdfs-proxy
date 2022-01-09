@@ -257,23 +257,6 @@ func (s *VolumeProxy) SyncCloudVolume(ctx context.Context, req *spb.SyncVolReque
 
 }
 
-func (s *VolumeProxy) GetProxyVolumes(ctx context.Context, req *spb.ProxyVolumeInfoRequest) (*spb.ProxyVolumeInfoResponse, error) {
-
-	var vis []*spb.VolumeInfoResponse
-	for id, con := range s.vc {
-
-		vi, err := con.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{})
-		if err != nil {
-			log.Errorf("Error connecting to volume %d error:%v", id, err)
-		} else if id != vi.SerialNumber {
-			log.Warnf("Returned Volume Serial Number %d does not match locally recored %d\n", vi.SerialNumber, id)
-		} else {
-			vis = append(vis, vi)
-		}
-	}
-	return &spb.ProxyVolumeInfoResponse{VolumeInfoResponse: vis}, nil
-}
-
 func (s *VolumeProxy) shutdown() {
 	timer := time.NewTimer(10 * time.Second)
 	log.Warn("Shutting down volume")

@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"encoding/json"
 	"runtime"
 	"sync"
 
@@ -32,7 +33,7 @@ var volumeIds []int64
 var tls = false
 var mtls = false
 var lport = "localhost:16442"
-var imagename = "gcr.io/hybrics/hybrics:master"
+var imagename = "gcr.io/hybrics/hybrics:dp2"
 var password = "admin"
 
 const (
@@ -997,19 +998,69 @@ func Benchmark512DirectWrite(b *testing.B) {
 }
 
 func TestProxyVolumeInfo(t *testing.T) {
-	for _, vid := range volumeIds {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		connection := connect(t, false, vid)
-		vis, err := connection.GetProxyVolumes(ctx)
-		assert.Nil(t, err)
-		var vids []int64
-		for _, vi := range vis.VolumeInfoResponse {
-			vids = append(vids, vi.SerialNumber)
-			t.Logf("serial = %d", vi.SerialNumber)
-		}
-		assert.ElementsMatch(t, vids, volumeIds)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t, false, -1)
+	vis, err := connection.GetProxyVolumes(ctx)
+	if err != nil {
+		t.Logf("error %v", err)
 	}
+	assert.Nil(t, err)
+	var vids []int64
+	for _, vi := range vis.VolumeInfoResponse {
+		vids = append(vids, vi.SerialNumber)
+		t.Logf("serial = %d", vi.SerialNumber)
+	}
+	assert.ElementsMatch(t, vids, volumeIds)
+}
+
+func TestReloadProxyVolume(t *testing.T) {
+	portR := &paip.PortRedirectors{}
+	for i := 2; i < 4; i++ {
+		fe := paip.ForwardEntry{Address: fmt.Sprintf("sdfs://localhost:644%d", i)}
+		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
+	}
+	b, err := json.Marshal(*portR)
+	assert.Nil(t, err)
+	err = ioutil.WriteFile("testpf.json", b, 0644)
+	assert.Nil(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t, false, -1)
+	_, err = connection.ReloadProxyConfig(ctx)
+	assert.Nil(t, err)
+	vis, err := connection.GetProxyVolumes(ctx)
+	if err != nil {
+		t.Logf("error %v", err)
+	}
+	assert.Nil(t, err)
+	for _, vi := range vis.VolumeInfoResponse {
+		t.Logf("serial = %d", vi.SerialNumber)
+	}
+	assert.Equal(t, 2, len(vis.VolumeInfoResponse))
+	portR = &paip.PortRedirectors{}
+	for i := 2; i < 5; i++ {
+		fe := paip.ForwardEntry{Address: fmt.Sprintf("sdfs://localhost:644%d", i)}
+		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
+	}
+	b, err = json.Marshal(*portR)
+	assert.Nil(t, err)
+	err = ioutil.WriteFile("testpf.json", b, 0644)
+	assert.Nil(t, err)
+	_, err = connection.ReloadProxyConfig(ctx)
+	assert.Nil(t, err)
+	vis, err = connection.GetProxyVolumes(ctx)
+	if err != nil {
+		t.Logf("error %v", err)
+	}
+	assert.Nil(t, err)
+	var vids []int64
+	for _, vi := range vis.VolumeInfoResponse {
+		vids = append(vids, vi.SerialNumber)
+		t.Logf("serial = %d", vi.SerialNumber)
+	}
+	assert.ElementsMatch(t, vids, volumeIds)
+
 }
 
 func TestMain(m *testing.M) {
@@ -1035,24 +1086,23 @@ func TestMain(m *testing.M) {
 			containernames = append(containernames, containername)
 
 			inputEnv := []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
-			if port != 3 {
-				inputEnv = append(inputEnv, "DISABLE_TLS=true")
-			}
+
+			inputEnv = append(inputEnv, "DISABLE_TLS=true")
 			cmd := []string{}
 			_, err = runContainer(cli, imagename, containername, portopening, "6442", inputEnv, cmd)
 			if err != nil {
 				fmt.Printf("Unable to create docker client %v", err)
 			}
-			if port != 3 {
-				maddress = append(maddress, fmt.Sprintf("sdfs://localhost:644%d", port))
-			} else {
-				maddress = append(maddress, fmt.Sprintf("sdfss://localhost:644%d", port))
-			}
+			maddress = append(maddress, fmt.Sprintf("sdfs://localhost:644%d", port))
+
 			port++
 		}
 	}
 	api.DisableTrust = true
+	portR := &paip.PortRedirectors{}
 	for _, addr := range maddress {
+		fe := paip.ForwardEntry{Address: addr}
+		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
 		connection, err := api.NewConnection(addr, false, -1)
 		retrys := 0
 		for err != nil {
@@ -1075,7 +1125,16 @@ func TestMain(m *testing.M) {
 		dd[connection.Volumeid] = false
 	}
 	paip.NOSHUTDOWN = true
-	pf := paip.NewPortRedirector("")
+	b, err := json.Marshal(*portR)
+	if err != nil {
+		fmt.Printf("Unable to serialize portredirectors %v", err)
+	}
+	err = ioutil.WriteFile("testpf.json", b, 0644)
+	defer os.Remove("testpf.json")
+	if err != nil {
+		fmt.Printf("Unable to write portredirectors to file %v", err)
+	}
+	pf := paip.NewPortRedirector("testpf.json")
 	pf.Cmp = cmp
 	pf.Dd = dd
 	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf)
@@ -1083,6 +1142,31 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	fmt.Printf("Non TLS Testing code is %d\n", code)
 	paip.StopServer()
+	cmp = make(map[int64]*grpc.ClientConn)
+	dd = make(map[int64]bool)
+	for _, addr := range maddress {
+		fe := paip.ForwardEntry{Address: addr}
+		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
+		connection, err := api.NewConnection(addr, false, -1)
+		retrys := 0
+		for err != nil {
+			log.Printf("retries = %d", retrys)
+			time.Sleep(20 * time.Second)
+			connection, err = api.NewConnection(addr, false, -1)
+			if retrys > 10 {
+				fmt.Printf("SDFS Server connection timed out %s\n", addr)
+				os.Exit(-1)
+			} else {
+				retrys++
+			}
+		}
+		if err != nil {
+			fmt.Printf("Unable to create connection %v", err)
+		}
+		log.Printf("connected to volume = %d", connection.Volumeid)
+		cmp[connection.Volumeid] = connection.Clnt
+		dd[connection.Volumeid] = false
+	}
 	tls = true
 	api.DisableTrust = true
 	paip.ServerCACert = "out/signer_key.crt"
@@ -1094,6 +1178,31 @@ func TestMain(m *testing.M) {
 	code = m.Run()
 	fmt.Printf("TLS Testing code is %d\n", code)
 	paip.StopServer()
+	cmp = make(map[int64]*grpc.ClientConn)
+	dd = make(map[int64]bool)
+	for _, addr := range maddress {
+		fe := paip.ForwardEntry{Address: addr}
+		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
+		connection, err := api.NewConnection(addr, false, -1)
+		retrys := 0
+		for err != nil {
+			log.Printf("retries = %d", retrys)
+			time.Sleep(20 * time.Second)
+			connection, err = api.NewConnection(addr, false, -1)
+			if retrys > 10 {
+				fmt.Printf("SDFS Server connection timed out %s\n", addr)
+				os.Exit(-1)
+			} else {
+				retrys++
+			}
+		}
+		if err != nil {
+			fmt.Printf("Unable to create connection %v", err)
+		}
+		log.Printf("connected to volume = %d", connection.Volumeid)
+		cmp[connection.Volumeid] = connection.Clnt
+		dd[connection.Volumeid] = false
+	}
 	paip.ServerMtls = true
 	mtls = true
 	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf)

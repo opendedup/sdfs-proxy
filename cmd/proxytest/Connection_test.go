@@ -758,15 +758,16 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Printf("Unable to create connection %v", err)
 	}
-
-	log.Printf("connected to volume = %d", connection.Volumeid)
+	if connection != nil {
+		log.Printf("connected to volume = %d", connection.Volumeid)
+	}
 	paip.NOSHUTDOWN = true
 	if connection != nil {
 		cmp := make(map[int64]*grpc.ClientConn)
 		cmp[connection.Volumeid] = connection.Clnt
 		dd := make(map[int64]bool)
 		dd[connection.Volumeid] = true
-		go paip.StartServer(cmp, port, true, dd, true, false, password)
+		go paip.StartServer(cmp, port, true, dd, true, false, password, nil)
 	}
 	fmt.Printf("Server initialized at %s\n", port)
 	code := m.Run()

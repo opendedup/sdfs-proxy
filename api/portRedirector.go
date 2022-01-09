@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"os"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 
 	pb "github.com/opendedup/sdfs-client-go/api"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
@@ -20,6 +22,7 @@ type PortRedictor struct {
 	config     string
 	pr         PortRedirectors
 	Cmp        map[int64]*grpc.ClientConn
+	pcmp       []*grpc.ClientConn
 	Dd         map[int64]bool
 	configLock sync.RWMutex
 }
@@ -48,6 +51,33 @@ func (s *PortRedictor) WriteConfig() error {
 	return nil
 }
 
+func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRequest) (*spb.ReloadConfigResponse, error) {
+	s.configLock.Lock()
+	defer s.configLock.Unlock()
+	err := s.localReadConfig()
+	if err != nil {
+		return nil, err
+	}
+	err = s.iop.ReloadVolumeMap(s.Cmp, s.Dd, false)
+	if err != nil {
+		return nil, err
+	}
+	err = s.vp.ReloadVolumeMap(s.Cmp, s.Dd, false)
+	if err != nil {
+		return nil, err
+	}
+	err = s.ep.ReloadVolumeMap(s.Cmp, s.Dd, false)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range s.pcmp {
+		if l != nil {
+			l.Close()
+		}
+	}
+	return &spb.ReloadConfigResponse{}, nil
+}
+
 func (s *PortRedictor) localReadConfig() error {
 	jsonFile, err := os.Open(s.config)
 	if err != nil {
@@ -73,10 +103,31 @@ func (s *PortRedictor) localReadConfig() error {
 		cmp[Connection.Volumeid] = Connection.Clnt
 		dd[Connection.Volumeid] = fe.Dedupe
 	}
+	s.pcmp = nil
+	for _, l := range s.Cmp {
+		s.pcmp = append(s.pcmp, l)
+	}
 	s.Cmp = cmp
 	s.Dd = dd
 	s.pr = fes
 	return nil
+}
+
+func (s *PortRedictor) GetProxyVolumes(ctx context.Context, req *spb.ProxyVolumeInfoRequest) (*spb.ProxyVolumeInfoResponse, error) {
+
+	var vis []*spb.VolumeInfoResponse
+	for id, con := range s.vp.vc {
+
+		vi, err := con.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{})
+		if err != nil {
+			log.Errorf("Error connecting to volume %d error:%v", id, err)
+		} else if id != vi.SerialNumber {
+			log.Warnf("Returned Volume Serial Number %d does not match locally recored %d\n", vi.SerialNumber, id)
+		} else {
+			vis = append(vis, vi)
+		}
+	}
+	return &spb.ProxyVolumeInfoResponse{VolumeInfoResponse: vis}, nil
 }
 
 func NewPortRedirector(config string) *PortRedictor {

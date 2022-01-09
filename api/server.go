@@ -136,9 +136,9 @@ func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 		}
 
 		hash := sha256.Sum256(rawCerts[i])
-		log.Infof("Fingerprint: %x\n\n", hash)
+		log.Infof("Fingerprint: %x", hash)
 
-		log.Info(hash, cert.DNSNames, cert.Subject)
+		log.Info(cert.DNSNames, cert.Subject)
 	}
 	return nil
 }
