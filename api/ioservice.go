@@ -316,7 +316,6 @@ func (s *FileIOProxy) Mknod(ctx context.Context, req *spb.MkNodRequest) (*spb.Mk
 		}
 		return mknodr, err
 	} else {
-		log.Errorf("unable to find volume %d", volid)
 		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
 

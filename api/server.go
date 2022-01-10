@@ -195,7 +195,7 @@ func serverInterceptor(ctx context.Context,
 }
 
 func serverStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	log.Infof("Interceptor = %s", info.FullMethod)
+	//log.Infof("Interceptor = %s", info.FullMethod)
 	if authenticate {
 		if info.FullMethod != "/org.opendedup.grpc.VolumeService/AuthenticateUser" {
 			if err := authorize(ss.Context()); err != nil {
