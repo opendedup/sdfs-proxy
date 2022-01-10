@@ -176,7 +176,7 @@ func serverInterceptor(ctx context.Context,
 	req interface{},
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler) (interface{}, error) {
-	fmt.Print("Interceptor")
+	log.Infof("Interceptor = %s", info.FullMethod)
 	if authenticate {
 		// Skip authorize when GetJWT is requested
 
@@ -195,7 +195,7 @@ func serverInterceptor(ctx context.Context,
 }
 
 func serverStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-
+	log.Infof("Interceptor = %s", info.FullMethod)
 	if authenticate {
 		if info.FullMethod != "/org.opendedup.grpc.VolumeService/AuthenticateUser" {
 			if err := authorize(ss.Context()); err != nil {
