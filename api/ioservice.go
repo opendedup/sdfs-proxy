@@ -258,7 +258,7 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 		if dval, ok := s.dedupe[volid]; ok {
 			err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len)
 			if err != nil {
-				log.Debugf("error writing %v", err)
+				log.Infof("error writing %v", err)
 				return nil, err
 			} else {
 				return &spb.DataWriteResponse{}, nil
