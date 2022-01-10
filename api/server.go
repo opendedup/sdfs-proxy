@@ -176,7 +176,7 @@ func serverInterceptor(ctx context.Context,
 	req interface{},
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler) (interface{}, error) {
-	log.Debug("Interceptor = %s", info.FullMethod)
+	log.Debug("Intercepted Call = %s", info.FullMethod)
 	if authenticate {
 		// Skip authorize when GetJWT is requested
 
