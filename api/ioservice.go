@@ -317,6 +317,7 @@ func (s *FileIOProxy) Mknod(ctx context.Context, req *spb.MkNodRequest) (*spb.Mk
 		}
 		return mknodr, err
 	} else {
+		log.Errorf("unable to find volume %d", volid)
 		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
 
@@ -561,14 +562,14 @@ func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bo
 			defer cancel()
 			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, indx)
 			if err != nil {
-				log.Printf("error initializing dedupe connection: %v\n", err)
+				log.Errorf("error initializing dedupe connection: %v\n", err)
 				return nil, err
 			}
 			dd[indx] = de
-
 		}
 		defaultVolume = indx
 	}
+	log.Errorf("Default Volume %d", defaultVolume)
 	sc := &FileIOProxy{fc: fcm, dedupeEnabled: dedupeEnabled, dedupe: dd, dfc: defaultVolume, proxy: proxy}
 	return sc, nil
 
