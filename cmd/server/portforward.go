@@ -10,8 +10,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewPortForward(filepath string, enableAuth, standalone bool, port string, debug bool, lpwd string) error {
+func NewPortForward(filepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string) error {
 	pf := api.NewPortRedirector(filepath)
+	args = append(args, "-s")
+
 	os.MkdirAll("/var/run/sdfs/", os.ModePerm)
 	os.MkdirAll("/var/log/sdfs/", os.ModePerm)
 	if !standalone && runtime.GOOS != "windows" {
@@ -24,6 +26,7 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 			LogFilePerm: 0640,
 			WorkDir:     "/var/run/",
 			Umask:       027,
+			Args:        args,
 		}
 
 		d, err := mcntxt.Reborn()

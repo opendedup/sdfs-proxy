@@ -32,7 +32,7 @@ var volumeIds []int64
 
 var tls = false
 var mtls = false
-var lport = "localhost:16442"
+var lport = "localhost:16442-16445"
 var imagename = "gcr.io/hybrics/hybrics:dp2"
 var password = "admin"
 
@@ -1218,11 +1218,13 @@ func TestMain(m *testing.M) {
 	code = m.Run()
 	fmt.Printf("AnyCert MTLS Testing code is %d\n", code)
 	paip.StopServer()
-	if runtime.GOOS != "windows" {
-		for _, containername := range containernames {
-			stopAndRemoveContainer(cli, containername)
+	/*
+		if runtime.GOOS != "windows" {
+			for _, containername := range containernames {
+				stopAndRemoveContainer(cli, containername)
+			}
 		}
-	}
+	*/
 	os.Exit(code)
 }
 

@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os/user"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,10 +49,35 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 		pr.ep = ec
 		pr.vp = vc
 	}
-
-	lis, err := net.Listen("tcp", port)
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+	ps := strings.Split(port, ":")
+	var lis net.Listener
+	if strings.Contains(ps[1], "-") {
+		pts := strings.Split(ps[1], "-")
+		sp, err := strconv.Atoi(pts[0])
+		if err != nil {
+			log.Fatalf("failed to parse: %s %v", pts[0], err)
+		}
+		ep, err := strconv.Atoi(pts[1])
+		if err != nil {
+			log.Fatalf("failed to parse: %s %v", pts[1], err)
+		}
+		for i := sp; i < ep+1; i++ {
+			lis, err = net.Listen("tcp", fmt.Sprintf("%s:%d", ps[0], i))
+			if err != nil {
+				log.Warnf("failed to listen on %d : %v", i, err)
+			} else {
+				port = fmt.Sprintf("%s:%d", ps[0], i)
+				break
+			}
+			if i == ep {
+				log.Fatalf("Unable to find open port")
+			}
+		}
+	} else {
+		lis, err = net.Listen("tcp", port)
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
 	}
 	maxMsgSize := 2097152 * 40
 	if ServerTls || ServerMtls {

@@ -26,14 +26,15 @@ func main() {
 	disableTrust := flag.Bool("trust-all", false, "Trust Self Signed TLS Certs")
 	version := flag.Bool("version", false, "Get the version number")
 	trustCert := flag.Bool("trust-cert", false, "Trust the certificate for url specified. This will download and store the certificate in $HOME/.sdfs/keys")
-	port := flag.String("listen-port", "localhost:16442", "The Port to listen on for proxy requests")
+	port := flag.String("listen-port", "localhost:16442", "The Port to listen on for proxy requests. To try a range of ports use syntax hostame:startport-endport e.g"+
+		" localhost:16442:16445 .")
 	stls := flag.Bool("server-tls", false, "Use TLS for listening port. This will use the certs located in $HOME/.sdfs/keys/[server.crt,server.key,server.crt]"+
 		"unless otherwise specified")
 	mstls := flag.Bool("server-mtls", false, "Use MTLS for listening port. This will use the certs located in $HOME/.sdfs/keys/[server.crt,server.key,server.crt]"+
 		"unless otherwise specified")
 	smtlsca := flag.String("server-root-ca", "", "The path the CA cert used to sign the MTLS Cert. This defaults to $HOME/.sdfs/keys/ca.crt")
-	smtlskey := flag.String("server-mtls-key", "", "The path the private key used for mutual TLS. This defaults to $HOME/.sdfs/keys/server.key")
-	smtlscert := flag.String("server-mtls-cert", "", "The path the server cert used for mutual TLS. This defaults to $HOME/.sdfs/keys/server.crt")
+	smtlskey := flag.String("server-tls-key", "", "The path the private key used for TLS. This defaults to $HOME/.sdfs/keys/server.key")
+	smtlscert := flag.String("server-tls-cert", "", "The path the server cert used for TLS. This defaults to $HOME/.sdfs/keys/server.crt")
 
 	mtls := flag.Bool("mtls", false, "Use Mutual TLS. This will use the certs located in $HOME/.sdfs/keys/[client.crt,client.key,ca.crt]"+
 		"unless otherwise specified")
@@ -46,7 +47,8 @@ func main() {
 	pfConfig := flag.String("pf-config", "", "The location of the Port forward Config")
 	flag.Parse()
 	enableAuth := false
-
+	log.Infof("read %v", os.Args)
+	log.Infof(" config %s", *pfConfig)
 	if *version {
 		fmt.Printf("Version : %s\n", Version)
 		fmt.Printf("Build Date: %s\n", BuildDate)
@@ -63,7 +65,7 @@ func main() {
 		fmt.Println("TLS Verification Disabled")
 		pb.DisableTrust = *disableTrust
 	}
-	if isFlagPassed("pwd") {
+	if isFlagPassed("p") {
 		pb.UserName = *user
 		pb.Password = *pwd
 
@@ -83,10 +85,10 @@ func main() {
 	if isFlagPassed("server-root-ca") {
 		api.ServerCACert = *smtlsca
 	}
-	if isFlagPassed("server-mtls-key") {
+	if isFlagPassed("server-tls-key") {
 		api.ServerKey = *smtlskey
 	}
-	if isFlagPassed("server-mtls-cert") {
+	if isFlagPassed("server-tls-cert") {
 		api.ServerCert = *smtlscert
 	}
 	if *stls {
@@ -104,10 +106,9 @@ func main() {
 	}
 	if isFlagPassed("pf-config") {
 		fmt.Printf("Reading %s\n", *pfConfig)
-		NewPortForward(*pfConfig, enableAuth, *standalone, *port, *debug, *lpwd)
+		NewPortForward(*pfConfig, enableAuth, *standalone, *port, *debug, *lpwd, os.Args)
 
 	} else {
-
 		Connection, err := pb.NewConnection(*address, *dedupe, -1)
 		fmt.Printf("Connected to %s\n", *address)
 		if err != nil {
@@ -116,7 +117,8 @@ func main() {
 		os.MkdirAll("/var/run/sdfs/", os.ModePerm)
 		os.MkdirAll("/var/log/sdfs/", os.ModePerm)
 		if !*standalone && runtime.GOOS != "windows" {
-
+			args := os.Args
+			args = append(args, "-s")
 			pidFile := "/var/run/sdfs/proxy-" + strings.ReplaceAll(*port, ":", "-") + ".pid"
 			logFile := "/var/log/sdfs/proxy-" + strings.ReplaceAll(*port, ":", "-") + ".log"
 			mcntxt := &daemon.Context{
@@ -126,6 +128,7 @@ func main() {
 				LogFilePerm: 0640,
 				WorkDir:     "/var/run/",
 				Umask:       027,
+				Args:        args,
 			}
 
 			d, err := mcntxt.Reborn()
