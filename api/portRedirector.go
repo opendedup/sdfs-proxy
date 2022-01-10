@@ -28,16 +28,18 @@ type PortRedictor struct {
 }
 
 type ForwardEntry struct {
-	Pwd          string `json:"pwd"`
-	User         string `json:"user"`
-	Lpwd         string `json:"local-auth"`
-	Address      string `json:"address" required:"true"`
-	DisableTrust bool   `json:"trust-all"`
-	Mtls         bool   `json:"mtls"`
-	Mtlsca       string `json:"root-ca"`
-	Mtlskey      string `json:"mtls-key"`
-	Mtlscert     string `json:"mtls-cert"`
-	Dedupe       bool   `json:"dedupe"`
+	Pwd           string `json:"pwd"`
+	User          string `json:"user"`
+	Lpwd          string `json:"local-auth"`
+	Address       string `json:"address" required:"true"`
+	DisableTrust  bool   `json:"trust-all"`
+	Mtls          bool   `json:"mtls"`
+	Mtlsca        string `json:"root-ca"`
+	Mtlskey       string `json:"mtls-key"`
+	Mtlscert      string `json:"mtls-cert"`
+	Dedupe        bool   `json:"dedupe"`
+	DedupeThreads int32  `json:"dedupe-threads" default:"8"`
+	DedupeBuffer  int32  `json:"dedupe-buffer" default:"4"`
 }
 
 type PortRedirectors struct {

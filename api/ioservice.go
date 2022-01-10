@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -560,7 +561,7 @@ func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bo
 		if dedupeEnabled[indx] {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, indx)
+			de, err := dedupe.NewDedupeEngine(ctx, clnt, 16, runtime.NumCPU(), debug, indx)
 			if err != nil {
 				log.Errorf("error initializing dedupe connection: %v\n", err)
 				return nil, err
