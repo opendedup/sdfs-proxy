@@ -3,8 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
@@ -309,8 +310,13 @@ func (s *FileIOProxy) Mknod(ctx context.Context, req *spb.MkNodRequest) (*spb.Mk
 		volid = s.dfc
 	}
 	if val, ok := s.fc[volid]; ok {
-		return val.Mknod(ctx, req)
+		mknodr, err := val.Mknod(ctx, req)
+		if err != nil {
+			log.Errorf("unable to mkdnod %d, %v", volid, err)
+		}
+		return mknodr, err
 	} else {
+		log.Errorf("unable to find volume %d", volid)
 		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
 
