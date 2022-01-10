@@ -75,7 +75,7 @@ func (s *SDFSEventProxy) SubscribeEvent(req *spb.SDFSEventRequest, stream spb.SD
 	}
 }
 
-func (s *SDFSEventProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, debug bool) error {
+func (s *SDFSEventProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, debug bool) error {
 	s.configLock.Lock()
 	defer s.configLock.Unlock()
 	vcm := make(map[int64]spb.SDFSEventServiceClient)

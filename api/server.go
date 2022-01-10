@@ -35,7 +35,7 @@ var ServerKey string
 var ServerCACert string
 var ServerCert string
 
-func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]bool, proxy, debug bool, pwd string, pr *PortRedictor) {
+func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor) {
 	password = pwd
 	authenticate = enableAuth
 	fc, err := NewFileIOProxy(Connections, dedupe, proxy, debug)

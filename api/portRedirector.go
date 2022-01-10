@@ -23,7 +23,7 @@ type PortRedictor struct {
 	pr         PortRedirectors
 	Cmp        map[int64]*grpc.ClientConn
 	pcmp       []*grpc.ClientConn
-	Dd         map[int64]bool
+	Dd         map[int64]ForwardEntry
 	configLock sync.RWMutex
 }
 
@@ -38,8 +38,8 @@ type ForwardEntry struct {
 	Mtlskey       string `json:"mtls-key"`
 	Mtlscert      string `json:"mtls-cert"`
 	Dedupe        bool   `json:"dedupe"`
-	DedupeThreads int32  `json:"dedupe-threads" default:"8"`
-	DedupeBuffer  int32  `json:"dedupe-buffer" default:"4"`
+	DedupeThreads int    `json:"dedupe-threads" default:"8"`
+	DedupeBuffer  int    `json:"dedupe-buffer" default:"4"`
 }
 
 type PortRedirectors struct {
@@ -64,11 +64,11 @@ func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRe
 	if err != nil {
 		return nil, err
 	}
-	err = s.vp.ReloadVolumeMap(s.Cmp, s.Dd, false)
+	err = s.vp.ReloadVolumeMap(s.Cmp, false)
 	if err != nil {
 		return nil, err
 	}
-	err = s.ep.ReloadVolumeMap(s.Cmp, s.Dd, false)
+	err = s.ep.ReloadVolumeMap(s.Cmp, false)
 	if err != nil {
 		return nil, err
 	}
@@ -96,14 +96,14 @@ func (s *PortRedictor) localReadConfig() error {
 		return err
 	}
 	cmp := make(map[int64]*grpc.ClientConn)
-	dd := make(map[int64]bool)
+	dd := make(map[int64]ForwardEntry)
 	for _, fe := range fes.ForwardEntrys {
 		Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, -1)
 		if err != nil {
 			log.Fatalf("Unable to connect to %s: %v\n", fe.Address, err)
 		}
 		cmp[Connection.Volumeid] = Connection.Clnt
-		dd[Connection.Volumeid] = fe.Dedupe
+		dd[Connection.Volumeid] = fe
 	}
 	s.pcmp = nil
 	for _, l := range s.Cmp {

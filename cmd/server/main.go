@@ -142,15 +142,25 @@ func main() {
 			defer mcntxt.Release()
 			cmp := make(map[int64]*grpc.ClientConn)
 			cmp[Connection.Volumeid] = Connection.Clnt
-			dd := make(map[int64]bool)
-			dd[Connection.Volumeid] = *dedupe
+			dd := make(map[int64]api.ForwardEntry)
+			dd[Connection.Volumeid] = api.ForwardEntry{
+				Address:       *address,
+				Dedupe:        *dedupe,
+				DedupeThreads: 1,
+				DedupeBuffer:  4,
+			}
 
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil)
 		} else {
 			cmp := make(map[int64]*grpc.ClientConn)
 			cmp[Connection.Volumeid] = Connection.Clnt
-			dd := make(map[int64]bool)
-			dd[Connection.Volumeid] = *dedupe
+			dd := make(map[int64]api.ForwardEntry)
+			dd[Connection.Volumeid] = api.ForwardEntry{
+				Address:       *address,
+				Dedupe:        *dedupe,
+				DedupeThreads: 1,
+				DedupeBuffer:  4,
+			}
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil)
 		}
 	}

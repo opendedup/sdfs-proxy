@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync"
 
 	log "github.com/sirupsen/logrus"
@@ -19,7 +18,7 @@ type FileIOProxy struct {
 	dfc           int64
 	proxy         bool
 	dedupe        map[int64]*dedupe.DedupeEngine
-	dedupeEnabled map[int64]bool
+	dedupeEnabled map[int64]ForwardEntry
 	configLock    sync.RWMutex
 }
 
@@ -44,7 +43,7 @@ func (s *FileIOProxy) Fsync(ctx context.Context, req *spb.FsyncRequest) (*spb.Fs
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
-	if s.dedupeEnabled[volid] {
+	if s.dedupeEnabled[volid].Dedupe {
 		s.dedupe[volid].SyncFile(req.Path)
 	}
 	if val, ok := s.fc[volid]; ok {
@@ -149,7 +148,7 @@ func (s *FileIOProxy) GetAttr(ctx context.Context, req *spb.StatRequest) (*spb.S
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
-	if s.dedupeEnabled[volid] {
+	if s.dedupeEnabled[volid].Dedupe {
 		s.dedupe[volid].SyncFile(req.Path)
 	}
 	if val, ok := s.fc[volid]; ok {
@@ -181,7 +180,7 @@ func (s *FileIOProxy) Flush(ctx context.Context, req *spb.FlushRequest) (*spb.Fl
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
-	if s.dedupeEnabled[volid] {
+	if s.dedupeEnabled[volid].Dedupe {
 		s.dedupe[volid].Sync(req.Fd)
 	}
 	if val, ok := s.fc[volid]; ok {
@@ -523,7 +522,7 @@ func (s *FileIOProxy) StatFS(ctx context.Context, req *spb.StatFSRequest) (*spb.
 
 }
 
-func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, debug bool) error {
+func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]ForwardEntry, debug bool) error {
 	s.configLock.Lock()
 	defer s.configLock.Unlock()
 	fcm := make(map[int64]spb.FileIOServiceClient)
@@ -532,7 +531,7 @@ func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 	for indx, clnt := range clnts {
 		vc := spb.NewFileIOServiceClient(clnt)
 		fcm[indx] = vc
-		if dedupeEnabled[indx] {
+		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, indx)
@@ -551,17 +550,17 @@ func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 	return nil
 }
 
-func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, proxy, debug bool) (*FileIOProxy, error) {
+func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]ForwardEntry, proxy, debug bool) (*FileIOProxy, error) {
 	fcm := make(map[int64]spb.FileIOServiceClient)
 	dd := make(map[int64]*dedupe.DedupeEngine)
 	var defaultVolume int64
 	for indx, clnt := range clnts {
 		vc := spb.NewFileIOServiceClient(clnt)
 		fcm[indx] = vc
-		if dedupeEnabled[indx] {
+		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, 16, runtime.NumCPU(), debug, indx)
+			de, err := dedupe.NewDedupeEngine(ctx, clnt, dedupeEnabled[indx].DedupeBuffer, dedupeEnabled[indx].DedupeThreads, debug, indx)
 			if err != nil {
 				log.Errorf("error initializing dedupe connection: %v\n", err)
 				return nil, err

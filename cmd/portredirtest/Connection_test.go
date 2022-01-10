@@ -1071,7 +1071,8 @@ func TestMain(m *testing.M) {
 	var err error
 	var port = 2
 	cmp := make(map[int64]*grpc.ClientConn)
-	dd := make(map[int64]bool)
+	dd := make(map[int64]paip.ForwardEntry)
+
 	if runtime.GOOS != "windows" {
 		for port < 5 {
 			cli, err = client.NewClientWithOpts(client.FromEnv)
@@ -1122,7 +1123,12 @@ func TestMain(m *testing.M) {
 		log.Printf("connected to volume = %d", connection.Volumeid)
 		volumeIds = append(volumeIds, connection.Volumeid)
 		cmp[connection.Volumeid] = connection.Clnt
-		dd[connection.Volumeid] = false
+		dd[connection.Volumeid] = paip.ForwardEntry{
+			Address:       addr,
+			Dedupe:        false,
+			DedupeThreads: 1,
+			DedupeBuffer:  4,
+		}
 	}
 	paip.NOSHUTDOWN = true
 	b, err := json.Marshal(*portR)
@@ -1143,7 +1149,7 @@ func TestMain(m *testing.M) {
 	fmt.Printf("Non TLS Testing code is %d\n", code)
 	paip.StopServer()
 	cmp = make(map[int64]*grpc.ClientConn)
-	dd = make(map[int64]bool)
+	dd = make(map[int64]paip.ForwardEntry)
 	for _, addr := range maddress {
 		fe := paip.ForwardEntry{Address: addr}
 		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
@@ -1165,7 +1171,12 @@ func TestMain(m *testing.M) {
 		}
 		log.Printf("connected to volume = %d", connection.Volumeid)
 		cmp[connection.Volumeid] = connection.Clnt
-		dd[connection.Volumeid] = false
+		dd[connection.Volumeid] = paip.ForwardEntry{
+			Address:       addr,
+			Dedupe:        false,
+			DedupeThreads: 1,
+			DedupeBuffer:  4,
+		}
 	}
 	tls = true
 	api.DisableTrust = true
@@ -1179,7 +1190,7 @@ func TestMain(m *testing.M) {
 	fmt.Printf("TLS Testing code is %d\n", code)
 	paip.StopServer()
 	cmp = make(map[int64]*grpc.ClientConn)
-	dd = make(map[int64]bool)
+	dd = make(map[int64]paip.ForwardEntry)
 	for _, addr := range maddress {
 		fe := paip.ForwardEntry{Address: addr}
 		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
@@ -1201,7 +1212,12 @@ func TestMain(m *testing.M) {
 		}
 		log.Printf("connected to volume = %d", connection.Volumeid)
 		cmp[connection.Volumeid] = connection.Clnt
-		dd[connection.Volumeid] = false
+		dd[connection.Volumeid] = paip.ForwardEntry{
+			Address:       addr,
+			Dedupe:        false,
+			DedupeThreads: 1,
+			DedupeBuffer:  4,
+		}
 	}
 	paip.ServerMtls = true
 	mtls = true
@@ -1218,13 +1234,11 @@ func TestMain(m *testing.M) {
 	code = m.Run()
 	fmt.Printf("AnyCert MTLS Testing code is %d\n", code)
 	paip.StopServer()
-	/*
-		if runtime.GOOS != "windows" {
-			for _, containername := range containernames {
-				stopAndRemoveContainer(cli, containername)
-			}
+	if runtime.GOOS != "windows" {
+		for _, containername := range containernames {
+			stopAndRemoveContainer(cli, containername)
 		}
-	*/
+	}
 	os.Exit(code)
 }
 

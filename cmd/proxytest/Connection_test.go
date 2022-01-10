@@ -765,8 +765,13 @@ func TestMain(m *testing.M) {
 	if connection != nil {
 		cmp := make(map[int64]*grpc.ClientConn)
 		cmp[connection.Volumeid] = connection.Clnt
-		dd := make(map[int64]bool)
-		dd[connection.Volumeid] = true
+		dd := make(map[int64]paip.ForwardEntry)
+		dd[connection.Volumeid] = paip.ForwardEntry{
+			Address:       maddress,
+			Dedupe:        true,
+			DedupeThreads: 1,
+			DedupeBuffer:  4,
+		}
 		go paip.StartServer(cmp, port, true, dd, true, false, password, nil)
 	}
 	fmt.Printf("Server initialized at %s\n", port)
