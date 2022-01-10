@@ -539,8 +539,9 @@ func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 				return err
 			}
 			dd[indx] = de
-			defaultVolume = indx
+
 		}
+		defaultVolume = indx
 	}
 	s.dfc = defaultVolume
 	s.dedupe = dd
