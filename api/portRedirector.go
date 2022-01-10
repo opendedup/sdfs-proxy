@@ -90,7 +90,7 @@ func (s *PortRedictor) localReadConfig() error {
 	var fes PortRedirectors
 	err = json.Unmarshal(byteValue, &fes)
 	if err != nil {
-		log.Printf("unable to parse %s", s.config)
+		log.Printf("unable to parse %s : %v", s.config, err)
 		return err
 	}
 	cmp := make(map[int64]*grpc.ClientConn)
