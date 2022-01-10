@@ -560,8 +560,9 @@ func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bo
 				return nil, err
 			}
 			dd[indx] = de
-			defaultVolume = indx
+
 		}
+		defaultVolume = indx
 	}
 	sc := &FileIOProxy{fc: fcm, dedupeEnabled: dedupeEnabled, dedupe: dd, dfc: defaultVolume, proxy: proxy}
 	return sc, nil
