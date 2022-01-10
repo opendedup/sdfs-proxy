@@ -99,6 +99,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 		sdfs.RegisterPortRedirectorServiceServer(server, pr)
 	}
 	fmt.Printf("Listening on %s auth enabled %v, dedupe enabled %v\n", port, enableAuth, dedupe)
+	log.Infof("Listening on %s auth enabled %v, dedupe enabled %v\n", port, enableAuth, dedupe)
 	fmt.Println("proxy ready")
 	if err := server.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
@@ -153,6 +154,8 @@ func LoadKeyPair(mtls, anycert bool) (*credentials.TransportCredentials, error) 
 }
 
 func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	log.Info("Verify certs")
+	fmt.Print("Verify certs")
 	for i := 0; i < len(rawCerts); i++ {
 		cert, err := x509.ParseCertificate(rawCerts[i])
 
@@ -173,7 +176,7 @@ func serverInterceptor(ctx context.Context,
 	req interface{},
 	info *grpc.UnaryServerInfo,
 	handler grpc.UnaryHandler) (interface{}, error) {
-
+	fmt.Print("Interceptor")
 	if authenticate {
 		// Skip authorize when GetJWT is requested
 
