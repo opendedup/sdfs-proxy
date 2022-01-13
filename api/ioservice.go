@@ -550,6 +550,58 @@ func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 	return nil
 }
 
+func (s *FileIOProxy) SetRetrievalTier(ctx context.Context, req *spb.SetRetrievalTierRequest) (*spb.SetRetrievalTierResponse, error) {
+
+	volid := req.PvolumeID
+
+	s.configLock.RLock()
+
+	defer s.configLock.RUnlock()
+
+	if s.proxy || volid == 0 || volid == -1 {
+
+		volid = s.dfc
+
+	}
+
+	if val, ok := s.fc[volid]; ok {
+
+		return val.SetRetrievalTier(ctx, req)
+
+	} else {
+
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+
+	}
+
+}
+
+func (s *FileIOProxy) GetRetrievalTier(ctx context.Context, req *spb.GetRetrievalTierRequest) (*spb.GetRetrievalTierResponse, error) {
+
+	volid := req.PvolumeID
+
+	s.configLock.RLock()
+
+	defer s.configLock.RUnlock()
+
+	if s.proxy || volid == 0 || volid == -1 {
+
+		volid = s.dfc
+
+	}
+
+	if val, ok := s.fc[volid]; ok {
+
+		return val.GetRetrievalTier(ctx, req)
+
+	} else {
+
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+
+	}
+
+}
+
 func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]ForwardEntry, proxy, debug bool) (*FileIOProxy, error) {
 	fcm := make(map[int64]spb.FileIOServiceClient)
 	dd := make(map[int64]*dedupe.DedupeEngine)
