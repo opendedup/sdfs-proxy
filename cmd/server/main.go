@@ -35,7 +35,7 @@ func main() {
 	smtlsca := flag.String("server-root-ca", "", "The path the CA cert used to sign the MTLS Cert. This defaults to $HOME/.sdfs/keys/ca.crt")
 	smtlskey := flag.String("server-tls-key", "", "The path the private key used for TLS. This defaults to $HOME/.sdfs/keys/server.key")
 	smtlscert := flag.String("server-tls-cert", "", "The path the server cert used for TLS. This defaults to $HOME/.sdfs/keys/server.crt")
-
+	rtls := flag.Bool("server-tls-remotercert", false, "Use Remote Server Cert")
 	mtls := flag.Bool("mtls", false, "Use Mutual TLS. This will use the certs located in $HOME/.sdfs/keys/[client.crt,client.key,ca.crt]"+
 		"unless otherwise specified")
 	mtlsca := flag.String("root-ca", "", "The path the CA cert used to sign the MTLS Cert. This defaults to $HOME/.sdfs/keys/ca.crt")
@@ -106,7 +106,7 @@ func main() {
 	}
 	if isFlagPassed("pf-config") {
 		fmt.Printf("Reading %s\n", *pfConfig)
-		NewPortForward(*pfConfig, enableAuth, *standalone, *port, *debug, *lpwd, os.Args)
+		NewPortForward(*pfConfig, enableAuth, *standalone, *port, *debug, *lpwd, os.Args, *rtls)
 
 	} else {
 		Connection, err := pb.NewConnection(*address, *dedupe, -1)
@@ -150,7 +150,7 @@ func main() {
 				DedupeBuffer:  4,
 			}
 
-			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil)
+			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil, false)
 		} else {
 			cmp := make(map[int64]*grpc.ClientConn)
 			cmp[Connection.Volumeid] = Connection.Clnt
@@ -161,7 +161,7 @@ func main() {
 				DedupeThreads: 1,
 				DedupeBuffer:  4,
 			}
-			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil)
+			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil, false)
 		}
 	}
 

@@ -772,7 +772,7 @@ func TestMain(m *testing.M) {
 			DedupeThreads: 1,
 			DedupeBuffer:  4,
 		}
-		go paip.StartServer(cmp, port, true, dd, true, false, password, nil)
+		go paip.StartServer(cmp, port, true, dd, true, false, password, nil, false)
 	}
 	fmt.Printf("Server initialized at %s\n", port)
 	code := m.Run()

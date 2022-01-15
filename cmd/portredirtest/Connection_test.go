@@ -1143,7 +1143,7 @@ func TestMain(m *testing.M) {
 	pf := paip.NewPortRedirector("testpf.json")
 	pf.Cmp = cmp
 	pf.Dd = dd
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf)
+	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 	code := m.Run()
 	fmt.Printf("Non TLS Testing code is %d\n", code)
@@ -1184,7 +1184,7 @@ func TestMain(m *testing.M) {
 	paip.ServerCert = "out/tls_key.crt"
 	paip.ServerKey = "out/tls_key.key"
 	paip.ServerTls = true
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf)
+	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 	code = m.Run()
 	fmt.Printf("TLS Testing code is %d\n", code)
@@ -1221,7 +1221,7 @@ func TestMain(m *testing.M) {
 	}
 	paip.ServerMtls = true
 	mtls = true
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf)
+	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 	code = m.Run()
 	fmt.Printf("MTLS Testing code is %d\n", code)
@@ -1229,7 +1229,7 @@ func TestMain(m *testing.M) {
 	paip.ServerMtls = true
 	paip.AnyCert = true
 	mtls = true
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf)
+	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 	code = m.Run()
 	fmt.Printf("AnyCert MTLS Testing code is %d\n", code)

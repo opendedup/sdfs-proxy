@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os/user"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -34,13 +36,24 @@ var ServerTls bool
 var ServerKey string
 var ServerCACert string
 var ServerCert string
+var serverConfigLock sync.RWMutex
+var remoteTLS bool
+var ecc sdfs.EncryptionServiceClient
 
-func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor) {
+func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor, remoteServerCert bool) {
 	password = pwd
 	authenticate = enableAuth
 	fc, err := NewFileIOProxy(Connections, dedupe, proxy, debug)
 	if err != nil {
 		log.Fatalf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
+	}
+	if remoteServerCert {
+		remoteTLS = true
+		for _, clnt := range Connections {
+			ecc = sdfs.NewEncryptionServiceClient(clnt)
+			break
+		}
+
 	}
 	vc := NewVolumeProxy(Connections, pwd, proxy)
 	ec := NewEventProxy(Connections, proxy)
@@ -81,7 +94,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	}
 	maxMsgSize := 2097152 * 40
 	if ServerTls || ServerMtls {
-		cc, err := LoadKeyPair(ServerMtls, AnyCert)
+		cc, err := LoadKeyPair(ServerMtls, AnyCert, remoteServerCert)
 		if err != nil {
 			log.Fatalf("failed to load certs: %v", err)
 		}
@@ -107,19 +120,43 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 
 }
 
-func LoadKeyPair(mtls, anycert bool) (*credentials.TransportCredentials, error) {
-	user, err := user.Current()
-	if err != nil {
-		return nil, err
-	}
-	if len(ServerCert) == 0 {
-		ServerCert = user.HomeDir + "/.sdfs/server.crt"
-	}
-	if len(ServerKey) == 0 {
-		ServerKey = user.HomeDir + "/.sdfs/server.key"
-	}
-	if len(ServerCACert) == 0 {
-		ServerCACert = user.HomeDir + "/.sdfs/ca.crt"
+func ReloadEncryptionClient(conn *grpc.ClientConn) error {
+	serverConfigLock.Lock()
+	defer serverConfigLock.Unlock()
+	ecc = sdfs.NewEncryptionServiceClient(conn)
+	return nil
+}
+
+func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentials, error) {
+	if rtls {
+		ctx, cancel := context.WithCancel(context.Background())
+
+		ms, err := ecc.ExportServerCertificate(ctx, &sdfs.ExportServerCertRequest{})
+		defer ecc.DeleteExportedCert(ctx, &sdfs.DeleteExportedCertRequest{})
+		defer cancel()
+		if err != nil {
+			return nil, err
+		} else if ms.GetErrorCode() > 0 {
+			log.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
+			return nil, fmt.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
+		} else {
+			ServerCert = ms.CertChainFilePath
+			ServerKey = ms.PrivateKeyFilePath
+		}
+	} else {
+		user, err := user.Current()
+		if err != nil {
+			return nil, err
+		}
+		if len(ServerCert) == 0 {
+			ServerCert = user.HomeDir + "/.sdfs/server.crt"
+		}
+		if len(ServerKey) == 0 {
+			ServerKey = user.HomeDir + "/.sdfs/server.key"
+		}
+		if len(ServerCACert) == 0 {
+			ServerCACert = user.HomeDir + "/.sdfs/ca.crt"
+		}
 	}
 	certificate, err := tls.LoadX509KeyPair(ServerCert, ServerKey)
 	if err != nil {
@@ -155,7 +192,6 @@ func LoadKeyPair(mtls, anycert bool) (*credentials.TransportCredentials, error) 
 
 func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	log.Info("Verify certs")
-	fmt.Print("Verify certs")
 	for i := 0; i < len(rawCerts); i++ {
 		cert, err := x509.ParseCertificate(rawCerts[i])
 
@@ -165,9 +201,28 @@ func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 		}
 
 		hash := sha256.Sum256(rawCerts[i])
-		log.Infof("Fingerprint: %x", hash)
+		hashs := hex.EncodeToString(hash[:])
+		if remoteTLS {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			accept, err := ecc.ValidateCertificate(ctx, &sdfs.EncryptionKeyVerifyRequest{Hash: hashs})
+			log.Infof("Fingerprint: %s, accept: %v", hashs, accept)
 
-		log.Info(cert.DNSNames, cert.Subject)
+			log.Info(cert.DNSNames, cert.Subject)
+			if err != nil {
+				return err
+			} else if accept.GetErrorCode() > 0 {
+				log.Errorf("unable to validate cert %d %s", accept.ErrorCode, accept.Error)
+				return fmt.Errorf("unable to validate cert %d %s", accept.ErrorCode, accept.Error)
+			} else if !accept.Accept {
+				log.Warnf("certificate not accepted %s %s", cert.DNSNames, cert.Subject)
+				return fmt.Errorf("certificate not accepted %s %s", cert.DNSNames, cert.Subject)
+			}
+		} else {
+			log.Infof("Fingerprint: %s", hashs)
+
+			log.Info(cert.DNSNames, cert.Subject)
+		}
 	}
 	return nil
 }

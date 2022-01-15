@@ -10,7 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewPortForward(filepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string) error {
+func NewPortForward(filepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string, remoteTls bool) error {
 	pf := api.NewPortRedirector(filepath)
 	args = append(args, "-s")
 
@@ -39,9 +39,9 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 		}
 		defer mcntxt.Release()
 
-		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf)
+		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf, remoteTls)
 	} else {
-		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf)
+		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf, remoteTls)
 	}
 
 	return nil
