@@ -443,10 +443,10 @@ func TestMaxAge(t *testing.T) {
 		tn := fmt.Sprintf("/tmp/%s", nfn)
 		time.Sleep(10 * time.Second)
 
-		_, err = connection.Download(ctx, _nfn, tn)
+		_, err = connection.Download(ctx, _nfn, tn, 1024)
 		defer os.Remove(nfn)
 		assert.Nil(t, err)
-		_, err = connection.Upload(ctx, tn, nfn)
+		_, err = connection.Upload(ctx, tn, nfn, 1024)
 		assert.Nil(t, err)
 		os.Remove(tn)
 		info, err = connection.DSEInfo(ctx)
@@ -495,10 +495,10 @@ func TestMaxAge(t *testing.T) {
 		nfn = string(randBytesMaskImpr(16))
 		tn = fmt.Sprintf("/tmp/%s", nfn)
 		time.Sleep(10 * time.Second)
-		_, err = connection.Download(ctx, _nfn, tn)
+		_, err = connection.Download(ctx, _nfn, tn, 1024)
 		assert.Nil(t, err)
 		for i := 0; i < 10; i++ {
-			_, err = connection.Upload(ctx, tn, fmt.Sprintf("file%d", i))
+			_, err = connection.Upload(ctx, tn, fmt.Sprintf("file%d", i), 1024)
 			if err != nil {
 				t.Logf("upload error %v", err)
 			}
@@ -756,7 +756,7 @@ func TestUpload(t *testing.T) {
 		assert.Nil(t, err)
 		h.Write(data)
 		bs := h.Sum(nil)
-		wr, err := connection.Upload(ctx, tn, fn)
+		wr, err := connection.Upload(ctx, tn, fn, 1024)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(len(data)), wr)
 		nhs := readFile(t, fn, false, vid)
@@ -764,7 +764,7 @@ func TestUpload(t *testing.T) {
 
 		nfn := string(randBytesMaskImpr(16))
 		ntn := fmt.Sprintf("/tmp/%s", nfn)
-		rr, err := connection.Download(ctx, fn, ntn)
+		rr, err := connection.Download(ctx, fn, ntn, 1024)
 		assert.Equal(t, int64(len(data)), rr)
 		assert.Nil(t, err)
 		ndata, err := ioutil.ReadFile(ntn)
