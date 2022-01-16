@@ -4,8 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"runtime"
 	"strings"
+	"syscall"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -104,6 +106,17 @@ func main() {
 		//fmt.Println("Using Mutual TLS")
 		pb.Mtls = *mtls
 	}
+	done := make(chan struct{})
+
+	go func() {
+		log.Println("Listening signals...")
+		c := make(chan os.Signal, 1) // we need to reserve to buffer size 1, so the notifier are not blocked
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+		<-c
+		close(done)
+	}()
+
 	if isFlagPassed("pf-config") {
 		fmt.Printf("Reading %s\n", *pfConfig)
 		NewPortForward(*pfConfig, enableAuth, *standalone, *port, *debug, *lpwd, os.Args, *rtls)
@@ -164,7 +177,8 @@ func main() {
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil, false)
 		}
 	}
-
+	<-done
+	log.Println("Done")
 }
 
 //StartServer starts the grpc service
