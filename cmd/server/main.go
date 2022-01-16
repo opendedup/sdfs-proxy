@@ -60,7 +60,8 @@ func main() {
 	if *trustCert {
 		err := pb.AddTrustedCert(*address)
 		if err != nil {
-			log.Fatalf("Unable to download cert from (%s): %v\n", *address, err)
+			log.Errorf("Unable to download cert from (%s): %v\n", *address, err)
+			os.Exit(6)
 		}
 	}
 	if *disableTrust {
@@ -126,7 +127,8 @@ func main() {
 		Connection, err := pb.NewConnection(*address, *dedupe, -1)
 		fmt.Printf("Connected to %s\n", *address)
 		if err != nil {
-			log.Fatalf("Unable to connect to %s: %v\n", *address, err)
+			log.Errorf("Unable to connect to %s: %v\n", *address, err)
+			os.Exit(4)
 		}
 		os.MkdirAll("/var/run/sdfs/", os.ModePerm)
 		os.MkdirAll("/var/log/sdfs/", os.ModePerm)

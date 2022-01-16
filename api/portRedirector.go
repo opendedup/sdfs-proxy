@@ -100,7 +100,8 @@ func (s *PortRedictor) localReadConfig() error {
 	for _, fe := range fes.ForwardEntrys {
 		Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, -1)
 		if err != nil {
-			log.Fatalf("Unable to connect to %s: %v\n", fe.Address, err)
+			log.Errorf("Unable to connect to %s: %v\n", fe.Address, err)
+			os.Exit(5)
 		}
 		cmp[Connection.Volumeid] = Connection.Clnt
 		dd[Connection.Volumeid] = fe

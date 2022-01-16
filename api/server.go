@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"os/user"
 	"strconv"
 	"strings"
@@ -45,7 +46,8 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	authenticate = enableAuth
 	fc, err := NewFileIOProxy(Connections, dedupe, proxy, debug)
 	if err != nil {
-		log.Fatalf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
+		log.Errorf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
+		os.Exit(7)
 	}
 	if remoteServerCert {
 		remoteTLS = true
@@ -68,11 +70,13 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 		pts := strings.Split(ps[1], "-")
 		sp, err := strconv.Atoi(pts[0])
 		if err != nil {
-			log.Fatalf("failed to parse: %s %v", pts[0], err)
+			log.Errorf("failed to parse: %s %v", pts[0], err)
+			os.Exit(8)
 		}
 		ep, err := strconv.Atoi(pts[1])
 		if err != nil {
-			log.Fatalf("failed to parse: %s %v", pts[1], err)
+			log.Errorf("failed to parse: %s %v", pts[1], err)
+			os.Exit(9)
 		}
 		for i := sp; i < ep+1; i++ {
 			lis, err = net.Listen("tcp", fmt.Sprintf("%s:%d", ps[0], i))
@@ -83,20 +87,23 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 				break
 			}
 			if i == ep {
-				log.Fatalf("Unable to find open port")
+				log.Errorf("Unable to find open port")
+				os.Exit(10)
 			}
 		}
 	} else {
 		lis, err = net.Listen("tcp", port)
 		if err != nil {
-			log.Fatalf("failed to listen: %v", err)
+			log.Errorf("failed to listen: %v", err)
+			os.Exit(11)
 		}
 	}
 	maxMsgSize := 2097152 * 40
 	if ServerTls || ServerMtls {
 		cc, err := LoadKeyPair(ServerMtls, AnyCert, remoteServerCert)
 		if err != nil {
-			log.Fatalf("failed to load certs: %v", err)
+			log.Errorf("failed to load certs: %v", err)
+			os.Exit(12)
 		}
 		server = grpc.NewServer(grpc.Creds(*cc), grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
 			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize))
@@ -115,7 +122,8 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	log.Infof("Listening on %s auth enabled %v, dedupe enabled %v\n", port, enableAuth, dedupe)
 	fmt.Println("proxy ready")
 	if err := server.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		log.Errorf("failed to serve: %v", err)
+		os.Exit(13)
 	}
 
 }
