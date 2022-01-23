@@ -1234,11 +1234,13 @@ func TestMain(m *testing.M) {
 	code = m.Run()
 	fmt.Printf("AnyCert MTLS Testing code is %d\n", code)
 	paip.StopServer()
-	if runtime.GOOS != "windows" {
-		for _, containername := range containernames {
-			stopAndRemoveContainer(cli, containername)
+	/*
+		if runtime.GOOS != "windows" {
+			for _, containername := range containernames {
+				stopAndRemoveContainer(cli, containername)
+			}
 		}
-	}
+	*/
 	os.Exit(code)
 }
 

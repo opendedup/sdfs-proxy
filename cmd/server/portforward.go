@@ -31,13 +31,13 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 		}
 	}
 	if fndct > 1 {
-		log.Errorf("sdfs-proxy already started %d times", fndct)
+		log.Errorf("sdfs-proxy already started %d times", fndct-1)
 		os.Exit(14)
 	}
 
 	if !standalone && runtime.GOOS != "windows" {
-		pidFile := "/var/run/sdfs/proxy-" + strings.ReplaceAll(port, ":", "-") + ".pid"
-		logFile := "/var/log/sdfs/proxy-" + strings.ReplaceAll(port, ":", "-") + ".log"
+		pidFile := "/var/run/sdfs/portforwarder-" + strings.ReplaceAll(port, ":", "-") + ".pid"
+		logFile := "/var/log/sdfs/portforwarder-" + strings.ReplaceAll(port, ":", "-") + ".log"
 		mcntxt := &daemon.Context{
 			PidFileName: pidFile,
 			PidFilePerm: 0644,
@@ -57,8 +57,6 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 			return nil
 		}
 		defer mcntxt.Release()
-
-		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf, remoteTls)
 	} else {
 		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf, remoteTls)
 	}

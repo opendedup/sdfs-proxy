@@ -105,7 +105,6 @@ func main() {
 		//fmt.Println("Using Mutual TLS")
 		pb.Mtls = *mtls
 	}
-	done := make(chan struct{})
 
 	if isFlagPassed("pf-config") {
 		fmt.Printf("Reading %s\n", *pfConfig)
@@ -168,8 +167,6 @@ func main() {
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil, false)
 		}
 	}
-	<-done
-	log.Println("Done")
 }
 
 //StartServer starts the grpc service

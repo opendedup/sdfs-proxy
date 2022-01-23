@@ -95,7 +95,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 		lis, err = net.Listen("tcp", port)
 		if err != nil {
 			log.Errorf("failed to listen: %v", err)
-			os.Exit(11)
+			os.Exit(-11)
 		}
 	}
 	maxMsgSize := 2097152 * 40
