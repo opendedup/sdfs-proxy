@@ -4,10 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/signal"
 	"runtime"
 	"strings"
-	"syscall"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -108,19 +106,6 @@ func main() {
 		pb.Mtls = *mtls
 	}
 	done := make(chan struct{})
-
-	go func() {
-		log.Infof("Listening signals...")
-		c := make(chan os.Signal, 1) // we need to reserve to buffer size 1, so the notifier are not blocked
-		signal.Notify(c, os.Interrupt, syscall.SIGHUP,
-			syscall.SIGINT,
-			syscall.SIGTERM,
-			syscall.SIGQUIT)
-
-		<-c
-		close(done)
-		log.Infof("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD.")
-	}()
 
 	if isFlagPassed("pf-config") {
 		fmt.Printf("Reading %s\n", *pfConfig)
