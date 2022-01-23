@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"strings"
 
+	ps "github.com/mitchellh/go-ps"
 	"github.com/opendedup/sdfs-proxy/api"
 	"github.com/sevlyar/go-daemon"
 	log "github.com/sirupsen/logrus"
@@ -16,6 +17,24 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 
 	os.MkdirAll("/var/run/sdfs/", os.ModePerm)
 	os.MkdirAll("/var/log/sdfs/", os.ModePerm)
+	p, err := ps.Processes()
+	if err != nil {
+		log.Errorf("error while trying to check processes %v", err)
+	}
+	if len(p) <= 0 {
+		log.Errorf("should have processes during check but none found")
+	}
+	fndct := 0
+	for _, p1 := range p {
+		if p1.Executable() == "sdfs-proxy" || p1.Executable() == "sdfs.proxy-s.exe" {
+			fndct++
+		}
+	}
+	if fndct > 1 {
+		log.Errorf("sdfs-proxy already started %d times", fndct)
+		os.Exit(14)
+	}
+
 	if !standalone && runtime.GOOS != "windows" {
 		pidFile := "/var/run/sdfs/proxy-" + strings.ReplaceAll(port, ":", "-") + ".pid"
 		logFile := "/var/log/sdfs/proxy-" + strings.ReplaceAll(port, ":", "-") + ".log"
