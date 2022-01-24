@@ -218,6 +218,7 @@ func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 
 			log.Info(cert.DNSNames, cert.Subject)
 			if err != nil {
+				log.Errorf("error while getting cert %v", err)
 				return err
 			} else if accept.GetErrorCode() > 0 {
 				log.Errorf("unable to validate cert %d %s", accept.ErrorCode, accept.Error)
