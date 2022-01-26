@@ -1,8 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"net"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 
 	ps "github.com/mitchellh/go-ps"
@@ -34,7 +37,22 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 		log.Errorf("sdfs-proxy already started %d times", fndct-1)
 		os.Exit(14)
 	}
-
+	var fn = -1
+	for i, arg := range args {
+		if arg == "-listen-port" {
+			fn = i
+			break
+		}
+	}
+	if fn >= 0 {
+		args = removeIndex(args, fn)
+		args = removeIndex(args, fn)
+	}
+	port, _ = testPort(port)
+	args = append(args, "-listen-port")
+	args = append(args, port)
+	log.Debugf("print %v", args)
+	log.Infof("Listening on : %s", port)
 	if !standalone && runtime.GOOS != "windows" {
 		pidFile := "/var/run/sdfs/portforwarder-" + strings.ReplaceAll(port, ":", "-") + ".pid"
 		logFile := "/var/log/sdfs/portforwarder-" + strings.ReplaceAll(port, ":", "-") + ".log"
@@ -63,4 +81,48 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 
 	return nil
 
+}
+
+func testPort(addr string) (string, error) {
+	ps := strings.Split(addr, ":")
+	if strings.Contains(ps[1], "-") {
+		pts := strings.Split(ps[1], "-")
+		sp, err := strconv.Atoi(pts[0])
+		if err != nil {
+			log.Errorf("failed to parse: %s %v", pts[0], err)
+			os.Exit(8)
+		}
+		ep, err := strconv.Atoi(pts[1])
+		if err != nil {
+			log.Errorf("failed to parse: %s %v", pts[1], err)
+			os.Exit(9)
+		}
+		for i := sp; i < ep+1; i++ {
+			lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", ps[0], i))
+			if err != nil {
+				log.Warnf("failed to listen on %d : %v", i, err)
+			} else {
+				lis.Close()
+				port := fmt.Sprintf("%s:%d", ps[0], i)
+				return port, nil
+			}
+			if i == ep {
+				log.Errorf("Unable to find open port")
+				os.Exit(10)
+			}
+		}
+		return "", fmt.Errorf("port not found in range %s", addr)
+	} else {
+		lis, err := net.Listen("tcp", addr)
+		if err != nil {
+			log.Errorf("failed to listen: %v", err)
+			os.Exit(-11)
+		}
+		lis.Close()
+		return addr, nil
+	}
+}
+
+func removeIndex(s []string, index int) []string {
+	return append(s[:index], s[index+1:]...)
 }

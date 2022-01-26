@@ -72,6 +72,17 @@ func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRe
 	if err != nil {
 		return nil, err
 	}
+	for _, con := range s.Cmp {
+		err = ReloadEncryptionClient(con)
+		if err == nil {
+			err = nil
+			break
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+
 	for _, l := range s.pcmp {
 		if l != nil {
 			l.Close()
