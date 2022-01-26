@@ -125,7 +125,6 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 		log.Errorf("failed to serve: %v", err)
 		os.Exit(13)
 	}
-
 }
 
 func ReloadEncryptionClient(conn *grpc.ClientConn) error {
@@ -199,7 +198,9 @@ func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentia
 }
 
 func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	log.Info("Verify certs")
+	log.Debug("Verify certs")
+	serverConfigLock.RLock()
+	defer serverConfigLock.RUnlock()
 	for i := 0; i < len(rawCerts); i++ {
 		cert, err := x509.ParseCertificate(rawCerts[i])
 
@@ -214,9 +215,9 @@ func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			accept, err := ecc.ValidateCertificate(ctx, &sdfs.EncryptionKeyVerifyRequest{Hash: hashs})
-			log.Infof("Fingerprint: %s, accept: %v", hashs, accept)
+			log.Debugf("Fingerprint: %s, accept: %v", hashs, accept)
 
-			log.Info(cert.DNSNames, cert.Subject)
+			log.Debug(cert.DNSNames, cert.Subject)
 			if err != nil {
 				log.Errorf("error while getting cert %v", err)
 				return err
@@ -228,9 +229,9 @@ func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 				return fmt.Errorf("certificate not accepted %s %s", cert.DNSNames, cert.Subject)
 			}
 		} else {
-			log.Infof("Fingerprint: %s", hashs)
+			log.Debugf("Fingerprint: %s", hashs)
 
-			log.Info(cert.DNSNames, cert.Subject)
+			log.Debug(cert.DNSNames, cert.Subject)
 		}
 	}
 	return nil
