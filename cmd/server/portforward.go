@@ -29,7 +29,8 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 	}
 	fndct := 0
 	for _, p1 := range p {
-		if p1.Executable() == "sdfs-proxy" || p1.Executable() == "sdfs.proxy-s.exe" {
+		log.Infof("process %s", p1)
+		if p1.Executable() == "sdfs-proxy" || p1.Executable() == "sdfs.proxy-s.exe" || p1.Executable() == "sdfs.proxy.exe" {
 			fndct++
 		}
 	}
@@ -100,11 +101,17 @@ func testPort(addr string) (string, error) {
 		for i := sp; i < ep+1; i++ {
 			lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", ps[0], i))
 			if err != nil {
+				lis.Close()
 				log.Warnf("failed to listen on %d : %v", i, err)
 			} else {
 				lis.Close()
-				port := fmt.Sprintf("%s:%d", ps[0], i)
-				return port, nil
+				lis, err = net.Listen("tcp", fmt.Sprintf("%s:%d", "localhost", i))
+				if err == nil {
+					lis.Close()
+					port := fmt.Sprintf("%s:%d", ps[0], i)
+					return port, nil
+				}
+				log.Warnf("failed to listen on localhost %d : %v", i, err)
 			}
 			if i == ep {
 				log.Errorf("Unable to find open port")
