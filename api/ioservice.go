@@ -256,7 +256,6 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			log.Infof("dedupe writing size of  %d", len(req.GetData()))
 			err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len)
 			if err != nil {
 				log.Errorf("error writing %v", err)
@@ -265,7 +264,6 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 				return &spb.DataWriteResponse{}, nil
 			}
 		}
-		log.Infof("writing size of  %d", len(req.GetData()))
 		return val.Write(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
