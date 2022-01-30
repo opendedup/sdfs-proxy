@@ -800,12 +800,8 @@ github.com/opencontainers/selinux v1.6.0/go.mod h1:VVGKuOLlE7v4PJyT6h7mNWvq1rzqi
 github.com/opencontainers/selinux v1.8.0/go.mod h1:RScLhm78qiWa2gbVCcGkC7tCGdgk3ogry1nUQF8Evvo=
 github.com/opendedup/go-rabin v0.0.0-20210502160858-b8d2d864c5c0 h1:uWbYeQjg6kidV0WKaSD/6yrBEd95MgYyXqXefg7Tb3w=
 github.com/opendedup/go-rabin v0.0.0-20210502160858-b8d2d864c5c0/go.mod h1:NejntDY71bxJaxqaZtRLmHc0nXq+ghnaoLXU4t9Y020=
-github.com/opendedup/sdfs-client-go v0.1.37-0.20220113155501-6ea03b955481 h1:bMOXLPppYd6oHxA3KEzqfROMWSnKTJ7d3Gm1omr4aug=
-github.com/opendedup/sdfs-client-go v0.1.37-0.20220113155501-6ea03b955481/go.mod h1:zCT1+gzP4c5Nxcq5C/rPjWDOSq8aulQ5Nh1ARMxHWKM=
-github.com/opendedup/sdfs-client-go v0.1.37-0.20220115193816-66971f73b60b h1:SZDTJrsecU31RZ4Z1Dhybu8hc2O2NZhHzdzGTb71tUg=
-github.com/opendedup/sdfs-client-go v0.1.37-0.20220115193816-66971f73b60b/go.mod h1:zCT1+gzP4c5Nxcq5C/rPjWDOSq8aulQ5Nh1ARMxHWKM=
-github.com/opendedup/sdfs-client-go v0.1.37-0.20220116021210-9559212a6bf1 h1:kQr1obIhYKxp89QSToSCfK9r/G7ji1/PDe6WrmTgCVU=
-github.com/opendedup/sdfs-client-go v0.1.37-0.20220116021210-9559212a6bf1/go.mod h1:zCT1+gzP4c5Nxcq5C/rPjWDOSq8aulQ5Nh1ARMxHWKM=
+github.com/opendedup/sdfs-client-go v0.1.37-0.20220130194349-1b12e9cde8da h1:bEMys4uIm1R4RK0LxLSjH/asUtQnGgizhqqzLvL+IzA=
+github.com/opendedup/sdfs-client-go v0.1.37-0.20220130194349-1b12e9cde8da/go.mod h1:zCT1+gzP4c5Nxcq5C/rPjWDOSq8aulQ5Nh1ARMxHWKM=
 github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492/go.mod h1:Ngi6UdF0k5OKD5t5wlmGhe/EDKPoUM3BXZSSfIuJbis=
 github.com/opentracing/basictracer-go v1.0.0/go.mod h1:QfBfYuafItcjQuMwinw9GhYKwFXS9KnPs5lxoYwgW74=
 github.com/opentracing/opentracing-go v1.0.2/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=

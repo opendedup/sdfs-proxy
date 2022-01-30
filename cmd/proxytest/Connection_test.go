@@ -28,7 +28,7 @@ import (
 var maddress = "sdfss://localhost:6442"
 var address = "sdfs://localhost:16442"
 var port = "localhost:16442"
-var imagename = "gcr.io/hybrics/hybrics:master"
+var imagename = "gcr.io/hybrics/hybrics:dp2"
 var password = "admin"
 
 const (
@@ -743,12 +743,12 @@ func TestMain(m *testing.M) {
 		}
 	}
 	api.DisableTrust = true
-	connection, err := api.NewConnection(maddress, false, -1)
+	connection, err := api.NewConnection(maddress, false, true, -1)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(maddress, false, -1)
+		connection, err = api.NewConnection(maddress, false, true, -1)
 		if retrys > 10 {
 			break
 		} else {
@@ -1027,7 +1027,7 @@ func connect(t *testing.T, dedupe bool) *api.SdfsConnection {
 	api.UserName = "admin"
 	api.Password = "admin"
 
-	connection, err := api.NewConnection(address, dedupe, -1)
+	connection, err := api.NewConnection(address, dedupe, true, -1)
 	if err != nil {
 		t.Errorf("Unable to connect to %s error: %v\n", address, err)
 		return nil

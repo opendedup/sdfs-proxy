@@ -41,6 +41,7 @@ func main() {
 	mtlsca := flag.String("root-ca", "", "The path the CA cert used to sign the MTLS Cert. This defaults to $HOME/.sdfs/keys/ca.crt")
 	mtlskey := flag.String("mtls-key", "", "The path the private used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.key")
 	mtlscert := flag.String("mtls-cert", "", "The path the client cert used for mutual TLS. This defaults to $HOME/.sdfs/keys/client.crt")
+	nocompress := flag.Bool("nocompress", true, "Compress api traffic")
 	dedupe := flag.Bool("dedupe", false, "Enable Client Side Dedupe")
 	debug := flag.Bool("debug", false, "Debug to stdout")
 	standalone := flag.Bool("s", false, "do not daemonize mount")
@@ -111,7 +112,7 @@ func main() {
 		NewPortForward(*pfConfig, enableAuth, *standalone, *port, *debug, *lpwd, os.Args, *rtls)
 
 	} else {
-		Connection, err := pb.NewConnection(*address, *dedupe, -1)
+		Connection, err := pb.NewConnection(*address, *dedupe, !*nocompress, -1)
 		fmt.Printf("Connected to %s\n", *address)
 		if err != nil {
 			log.Errorf("Unable to connect to %s: %v\n", *address, err)

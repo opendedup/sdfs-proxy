@@ -1104,12 +1104,12 @@ func TestMain(m *testing.M) {
 	for _, addr := range maddress {
 		fe := paip.ForwardEntry{Address: addr}
 		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
-		connection, err := api.NewConnection(addr, false, -1)
+		connection, err := api.NewConnection(addr, false, true, -1)
 		retrys := 0
 		for err != nil {
 			log.Printf("retries = %d", retrys)
 			time.Sleep(20 * time.Second)
-			connection, err = api.NewConnection(addr, false, -1)
+			connection, err = api.NewConnection(addr, false, true, -1)
 			if retrys > 10 {
 				fmt.Printf("SDFS Server connection timed out %s\n", addr)
 				os.Exit(-1)
@@ -1153,12 +1153,12 @@ func TestMain(m *testing.M) {
 	for _, addr := range maddress {
 		fe := paip.ForwardEntry{Address: addr}
 		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
-		connection, err := api.NewConnection(addr, false, -1)
+		connection, err := api.NewConnection(addr, false, true, -1)
 		retrys := 0
 		for err != nil {
 			log.Printf("retries = %d", retrys)
 			time.Sleep(20 * time.Second)
-			connection, err = api.NewConnection(addr, false, -1)
+			connection, err = api.NewConnection(addr, false, true, -1)
 			if retrys > 10 {
 				fmt.Printf("SDFS Server connection timed out %s\n", addr)
 				os.Exit(-1)
@@ -1194,12 +1194,12 @@ func TestMain(m *testing.M) {
 	for _, addr := range maddress {
 		fe := paip.ForwardEntry{Address: addr}
 		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
-		connection, err := api.NewConnection(addr, false, -1)
+		connection, err := api.NewConnection(addr, false, true, -1)
 		retrys := 0
 		for err != nil {
 			log.Printf("retries = %d", retrys)
 			time.Sleep(20 * time.Second)
-			connection, err = api.NewConnection(addr, false, -1)
+			connection, err = api.NewConnection(addr, false, true, -1)
 			if retrys > 10 {
 				fmt.Printf("SDFS Server connection timed out %s\n", addr)
 				os.Exit(-1)
@@ -1500,7 +1500,7 @@ func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 		api.MtlsKey = "out/client_key.key"
 	}
 
-	connection, err := api.NewConnection(address, dedupe, volumeid)
+	connection, err := api.NewConnection(address, dedupe, true, volumeid)
 	if err != nil {
 		t.Errorf("Unable to connect to %s error: %v\n", address, err)
 		return nil
@@ -1527,12 +1527,12 @@ func gconnect(b *testing.B, dedupe bool, volumeid int64) *api.SdfsConnection {
 		api.MtlsKey = "out/client_key.key"
 	}
 
-	connection, err := api.NewConnection(address, false, -1)
+	connection, err := api.NewConnection(address, false, true, -1)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(address, false, -1)
+		connection, err = api.NewConnection(address, false, true, -1)
 		if retrys > 10 {
 			fmt.Printf("SDFS Server connection timed out %s\n", address)
 			os.Exit(-1)
@@ -1546,12 +1546,12 @@ func gconnect(b *testing.B, dedupe bool, volumeid int64) *api.SdfsConnection {
 func dconnect(b *testing.B) *api.SdfsConnection {
 	var address = "sdfss://localhost:6443"
 
-	connection, err := api.NewConnection(address, false, -1)
+	connection, err := api.NewConnection(address, false, true, -1)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(address, false, -1)
+		connection, err = api.NewConnection(address, false, true, -1)
 		if retrys > 10 {
 			fmt.Printf("SDFS Server connection timed out %s\n", address)
 			os.Exit(-1)
