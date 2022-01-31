@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/pierrec/lz4"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/opendedup/sdfs-client-go/dedupe"
@@ -256,12 +257,23 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len)
-			if err != nil {
-				log.Errorf("error writing %v", err)
-				return nil, err
+			if req.Compressed {
+				out := make([]byte, req.Len)
+				_, err := lz4.UncompressBlock(req.Data, out)
+				if err != nil {
+					log.Print(err)
+					return nil, err
+				} else {
+					return &spb.DataWriteResponse{}, nil
+				}
 			} else {
-				return &spb.DataWriteResponse{}, nil
+				err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len)
+				if err != nil {
+					log.Errorf("error writing %v", err)
+					return nil, err
+				} else {
+					return &spb.DataWriteResponse{}, nil
+				}
 			}
 		}
 		return val.Write(ctx, req)

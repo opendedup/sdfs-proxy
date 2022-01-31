@@ -9,6 +9,7 @@ require (
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/mitchellh/go-ps v1.0.0
 	github.com/opendedup/sdfs-client-go v0.1.37-0.20220130194349-1b12e9cde8da
+	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/sevlyar/go-daemon v0.1.5
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
