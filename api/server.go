@@ -60,10 +60,12 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	}
 	vc := NewVolumeProxy(Connections, pwd, proxy)
 	ec := NewEventProxy(Connections, proxy)
+	sc := NewStorageService(Connections, proxy)
 	if pr != nil {
 		pr.iop = fc
 		pr.ep = ec
 		pr.vp = vc
+		pr.sp = sc
 	}
 	ps := strings.Split(port, ":")
 	var lis net.Listener

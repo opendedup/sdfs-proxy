@@ -19,6 +19,7 @@ type PortRedictor struct {
 	vp         *VolumeProxy
 	ep         *SDFSEventProxy
 	iop        *FileIOProxy
+	sp         *StorageServiceProxy
 	config     string
 	pr         PortRedirectors
 	Cmp        map[int64]*grpc.ClientConn
@@ -40,7 +41,7 @@ type ForwardEntry struct {
 	Dedupe        bool   `json:"dedupe"`
 	DedupeThreads int    `json:"dedupe-threads" default:"8"`
 	DedupeBuffer  int    `json:"dedupe-buffer" default:"4"`
-	Compress      bool   `json:"compress"`
+	CompressData  bool   `json:"compress"`
 }
 
 type PortRedirectors struct {
@@ -70,6 +71,10 @@ func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRe
 		return nil, err
 	}
 	err = s.ep.ReloadVolumeMap(s.Cmp, false)
+	if err != nil {
+		return nil, err
+	}
+	err = s.sp.ReloadVolumeMap(s.Cmp, false)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +115,7 @@ func (s *PortRedictor) localReadConfig() error {
 	cmp := make(map[int64]*grpc.ClientConn)
 	dd := make(map[int64]ForwardEntry)
 	for _, fe := range fes.ForwardEntrys {
-		Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, fe.Compress, -1)
+		Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, fe.CompressData, -1)
 		if err != nil {
 			log.Errorf("Unable to connect to %s: %v\n", fe.Address, err)
 			os.Exit(5)

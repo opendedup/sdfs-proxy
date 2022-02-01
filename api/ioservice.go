@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/pierrec/lz4"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/opendedup/sdfs-client-go/dedupe"
@@ -258,10 +257,14 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
 			if req.Compressed {
-				out := make([]byte, req.Len)
-				_, err := lz4.UncompressBlock(req.Data, out)
+				out, err := dedupe.DecompressData(req.Data, req.Len)
 				if err != nil {
 					log.Print(err)
+					return nil, err
+				}
+				err = dval.Write(req.FileHandle, req.Start, out, req.Len)
+				if err != nil {
+					log.Errorf("error writing %v", err)
 					return nil, err
 				} else {
 					return &spb.DataWriteResponse{}, nil
@@ -274,6 +277,18 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 				} else {
 					return &spb.DataWriteResponse{}, nil
 				}
+			}
+		}
+		if dval, ok := s.dedupeEnabled[volid]; ok {
+			if !req.Compressed && dval.CompressData {
+
+				buf, err := dedupe.CompressData(req.Data)
+				if err != nil {
+					log.Error(err)
+					return nil, err
+				}
+				req.Data = buf
+				req.Compressed = true
 			}
 		}
 		return val.Write(ctx, req)
@@ -546,7 +561,7 @@ func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, indx)
+			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, dedupeEnabled[indx].CompressData, indx)
 			if err != nil {
 				log.Printf("error initializing dedupe connection: %v\n", err)
 				return err
@@ -556,6 +571,7 @@ func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 		}
 		defaultVolume = indx
 	}
+	s.dedupeEnabled = dedupeEnabled
 	s.dfc = defaultVolume
 	s.dedupe = dd
 	s.fc = fcm
@@ -624,7 +640,7 @@ func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]Fo
 		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, dedupeEnabled[indx].DedupeBuffer, dedupeEnabled[indx].DedupeThreads, debug, indx)
+			de, err := dedupe.NewDedupeEngine(ctx, clnt, dedupeEnabled[indx].DedupeBuffer, dedupeEnabled[indx].DedupeThreads, debug, dedupeEnabled[indx].CompressData, indx)
 			if err != nil {
 				log.Errorf("error initializing dedupe connection: %v\n", err)
 				return nil, err
