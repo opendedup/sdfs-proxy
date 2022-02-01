@@ -165,7 +165,6 @@ func (s *StorageServiceProxy) GetSparseDedupeFile(req *spb.SparseDedupeFileReque
 			fl, err := fi.Recv()
 			if err != nil {
 				return err
-
 			}
 			if err := stream.Send(fl); err != nil {
 				return err
