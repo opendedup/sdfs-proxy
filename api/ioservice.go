@@ -254,12 +254,13 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
+
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
 			if req.Compressed {
 				out, err := dedupe.DecompressData(req.Data, req.Len)
 				if err != nil {
-					log.Print(err)
+					log.Error(err)
 					return nil, err
 				}
 				err = dval.Write(req.FileHandle, req.Start, out, req.Len)
@@ -279,17 +280,14 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 				}
 			}
 		}
-		if dval, ok := s.dedupeEnabled[volid]; ok {
-			if !req.Compressed && dval.CompressData {
-
-				buf, err := dedupe.CompressData(req.Data)
-				if err != nil {
-					log.Error(err)
-					return nil, err
-				}
-				req.Data = buf
-				req.Compressed = true
+		if len(req.Data) > 10 && !req.Compressed && s.dedupeEnabled[volid].CompressData {
+			buf, err := dedupe.CompressData(req.Data)
+			if err != nil {
+				log.Error(err)
+				return nil, err
 			}
+			req.Data = buf
+			req.Compressed = true
 		}
 		return val.Write(ctx, req)
 	} else {
