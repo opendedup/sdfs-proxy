@@ -164,6 +164,7 @@ func main() {
 				Dedupe:        *dedupe,
 				DedupeThreads: 1,
 				DedupeBuffer:  4,
+				CompressData:  !*nocompress,
 			}
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil, false)
 		}
