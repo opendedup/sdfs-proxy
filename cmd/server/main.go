@@ -48,6 +48,7 @@ func main() {
 	buffers := flag.Int("dedupe-buffers", 4, "number of local cache buffers for dedupe")
 	threads := flag.Int("dedupe-threads", 4, "number of threads used for dedupe")
 	pfConfig := flag.String("pf-config", "", "The location of the Port forward Config")
+	logPath := flag.String("log-path", "/var/log/sdfs/", "Base Path for logs")
 	flag.Parse()
 	enableAuth := false
 	log.Infof("read %v", os.Args)
@@ -111,7 +112,7 @@ func main() {
 
 	if isFlagPassed("pf-config") {
 		fmt.Printf("Reading %s\n", *pfConfig)
-		NewPortForward(*pfConfig, enableAuth, *standalone, *port, *debug, *lpwd, os.Args, *rtls)
+		NewPortForward(*pfConfig, enableAuth, *standalone, *port, *debug, *lpwd, os.Args, *rtls, *logPath)
 
 	} else {
 		Connection, err := pb.NewConnection(*address, *dedupe, !*nocompress, -1)
@@ -120,13 +121,14 @@ func main() {
 			log.Errorf("Unable to connect to %s: %v\n", *address, err)
 			os.Exit(4)
 		}
+
 		os.MkdirAll("/var/run/sdfs/", os.ModePerm)
-		os.MkdirAll("/var/log/sdfs/", os.ModePerm)
+		os.MkdirAll(*logPath, os.ModePerm)
 		if !*standalone && runtime.GOOS != "windows" {
 			args := os.Args
 			args = append(args, "-s")
 			pidFile := "/var/run/sdfs/proxy-" + strings.ReplaceAll(*port, ":", "-") + ".pid"
-			logFile := "/var/log/sdfs/proxy-" + strings.ReplaceAll(*port, ":", "-") + ".log"
+			logFile := *logPath + "proxy-" + strings.ReplaceAll(*port, ":", "-") + ".log"
 			mcntxt := &daemon.Context{
 				PidFileName: pidFile,
 				PidFilePerm: 0644,

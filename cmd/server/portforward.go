@@ -14,12 +14,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewPortForward(filepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string, remoteTls bool) error {
-	pf := api.NewPortRedirector(filepath)
+func NewPortForward(filepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string, remoteTls bool, logPath string) error {
+
 	args = append(args, "-s")
 
 	os.MkdirAll("/var/run/sdfs/", os.ModePerm)
-	os.MkdirAll("/var/log/sdfs/", os.ModePerm)
+	os.MkdirAll(logPath, os.ModePerm)
 	p, err := ps.Processes()
 	if err != nil {
 		log.Errorf("error while trying to check processes %v", err)
@@ -56,7 +56,7 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 	log.Infof("Listening on : %s", port)
 	if !standalone && runtime.GOOS != "windows" {
 		pidFile := "/var/run/sdfs/portforwarder-" + strings.ReplaceAll(port, ":", "-") + ".pid"
-		logFile := "/var/log/sdfs/portforwarder-" + strings.ReplaceAll(port, ":", "-") + ".log"
+		logFile := logPath + "portforwarder-" + strings.ReplaceAll(port, ":", "-") + ".log"
 		mcntxt := &daemon.Context{
 			PidFileName: pidFile,
 			PidFilePerm: 0644,
@@ -77,6 +77,7 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 		}
 		defer mcntxt.Release()
 	} else {
+		pf := api.NewPortRedirector(filepath, port)
 		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf, remoteTls)
 	}
 

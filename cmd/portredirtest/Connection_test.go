@@ -1140,7 +1140,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Printf("Unable to write portredirectors to file %v", err)
 	}
-	pf := paip.NewPortRedirector("testpf.json")
+	pf := paip.NewPortRedirector("testpf.json", lport)
 	pf.Cmp = cmp
 	pf.Dd = dd
 	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)

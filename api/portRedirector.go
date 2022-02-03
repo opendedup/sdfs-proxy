@@ -26,6 +26,7 @@ type PortRedictor struct {
 	pcmp       []*grpc.ClientConn
 	Dd         map[int64]ForwardEntry
 	configLock sync.RWMutex
+	listenPort string
 }
 
 type ForwardEntry struct {
@@ -45,6 +46,7 @@ type ForwardEntry struct {
 }
 
 type PortRedirectors struct {
+	ListenPort    string         `json:"port"`
 	ForwardEntrys []ForwardEntry `json:"forwarders"`
 }
 
@@ -95,6 +97,35 @@ func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRe
 		}
 	}
 	return &spb.ReloadConfigResponse{}, nil
+}
+
+func (s *PortRedictor) localWriteConfig() error {
+	jsonFile, err := os.Open(s.config)
+	if err != nil {
+		return err
+	}
+	byteValue, err := ioutil.ReadAll(jsonFile)
+	if err != nil {
+		return err
+	}
+	var fes PortRedirectors
+	err = json.Unmarshal(byteValue, &fes)
+	if err != nil {
+		log.Printf("unable to parse %s : %v", s.config, err)
+		return err
+	}
+	fes.ListenPort = s.listenPort
+	data, err := json.MarshalIndent(fes, "", " ")
+	if err != nil {
+		log.Printf("unable to marshal %s : %v", s.config, err)
+		return err
+	}
+	err = ioutil.WriteFile(s.config, data, 0644)
+	if err != nil {
+		log.Printf("unable to write to file %s : %v", s.config, err)
+		return err
+	}
+	return nil
 }
 
 func (s *PortRedictor) localReadConfig() error {
@@ -150,11 +181,12 @@ func (s *PortRedictor) GetProxyVolumes(ctx context.Context, req *spb.ProxyVolume
 	return &spb.ProxyVolumeInfoResponse{VolumeInfoResponse: vis}, nil
 }
 
-func NewPortRedirector(config string) *PortRedictor {
+func NewPortRedirector(config string, listenPort string) *PortRedictor {
 
-	sc := &PortRedictor{config: config}
+	sc := &PortRedictor{config: config, listenPort: listenPort}
 	if len(config) > 0 {
 		sc.localReadConfig()
+		sc.localWriteConfig()
 	}
 	return sc
 
