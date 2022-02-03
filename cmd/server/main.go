@@ -45,6 +45,8 @@ func main() {
 	dedupe := flag.Bool("dedupe", false, "Enable Client Side Dedupe")
 	debug := flag.Bool("debug", false, "Debug to stdout")
 	standalone := flag.Bool("s", false, "do not daemonize mount")
+	buffers := flag.Int("dedupe-buffers", 4, "number of local cache buffers for dedupe")
+	threads := flag.Int("dedupe-threads", 4, "number of threads used for dedupe")
 	pfConfig := flag.String("pf-config", "", "The location of the Port forward Config")
 	flag.Parse()
 	enableAuth := false
@@ -150,8 +152,8 @@ func main() {
 			dd[Connection.Volumeid] = api.ForwardEntry{
 				Address:       *address,
 				Dedupe:        *dedupe,
-				DedupeThreads: 1,
-				DedupeBuffer:  4,
+				DedupeThreads: *threads,
+				DedupeBuffer:  *buffers,
 				CompressData:  !*nocompress,
 			}
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil, false)
@@ -162,8 +164,8 @@ func main() {
 			dd[Connection.Volumeid] = api.ForwardEntry{
 				Address:       *address,
 				Dedupe:        *dedupe,
-				DedupeThreads: 1,
-				DedupeBuffer:  4,
+				DedupeThreads: *threads,
+				DedupeBuffer:  *buffers,
 				CompressData:  !*nocompress,
 			}
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil, false)
