@@ -417,6 +417,24 @@ func TestSync(t *testing.T) {
 	}
 }
 
+func uploadTest(ctx context.Context, t *testing.T, vid int64) {
+	fn, _ := makeFile(t, "", 1024, false, vid)
+	connection := connect(t, false, vid)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fh, err := connection.Open(ctx, fn, int32(-1))
+	assert.Nil(t, err)
+	b := randBytesMaskImpr(16)
+	err = connection.Write(ctx, fh, b, 0, int32(len(b)))
+	assert.Nil(t, err)
+	err = connection.Flush(ctx, fn, fh)
+	assert.Nil(t, err)
+	err = connection.Release(ctx, fh)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
 func TestMaxAge(t *testing.T) {
 	for _, vid := range volumeIds {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -1036,6 +1054,7 @@ func TestReloadProxyVolume(t *testing.T) {
 	assert.Nil(t, err)
 	for _, vi := range vis.VolumeInfoResponse {
 		t.Logf("serial = %d", vi.SerialNumber)
+		uploadTest(ctx, t, vi.SerialNumber)
 	}
 	assert.Equal(t, 2, len(vis.VolumeInfoResponse))
 	portR = &paip.PortRedirectors{}
@@ -1058,6 +1077,7 @@ func TestReloadProxyVolume(t *testing.T) {
 	for _, vi := range vis.VolumeInfoResponse {
 		vids = append(vids, vi.SerialNumber)
 		t.Logf("serial = %d", vi.SerialNumber)
+		uploadTest(ctx, t, vi.SerialNumber)
 	}
 	assert.ElementsMatch(t, vids, volumeIds)
 
