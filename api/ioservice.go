@@ -362,7 +362,7 @@ func (s *FileIOProxy) Open(ctx context.Context, req *spb.FileOpenRequest) (*spb.
 			return rsp, err
 		}
 		if dval, ok := s.dedupe[volid]; ok {
-			err = dval.Open(req.Path, rsp.FileHandle)
+			err = dval.Open(req.Path, rsp.FileHandle, req.PvolumeID)
 			if err != nil {
 				log.Errorf("unable to open %v", err)
 				return nil, err
