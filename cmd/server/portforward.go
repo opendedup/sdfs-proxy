@@ -32,7 +32,7 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 		log.Infof("process [%s] %v %v", p1, p1.Executable() == "sdfs-proxy-s.exe", p1.Executable() == "sdfs-proxy")
 		if p1.Executable() == "sdfs-proxy" || p1.Executable() == "sdfs-proxy-s.exe" {
 			fndct++
-			log.Infof("Found SDFS Proxy %s", p1)
+			log.Infof("Found SDFS Proxy %s ct = %d", p1, fndct)
 		}
 	}
 	if fndct > 1 {
