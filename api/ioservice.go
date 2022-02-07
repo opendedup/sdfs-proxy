@@ -20,8 +20,6 @@ type FileIOProxy struct {
 	dedupe        map[int64]*dedupe.DedupeEngine
 	dedupeEnabled map[int64]ForwardEntry
 	configLock    sync.RWMutex
-	cacheSize     int
-	cacheAge      int
 }
 
 func (s *FileIOProxy) GetXAttrSize(ctx context.Context, req *spb.GetXAttrSizeRequest) (*spb.GetXAttrSizeResponse, error) {

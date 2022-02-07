@@ -16,17 +16,19 @@ import (
 
 type PortRedictor struct {
 	spb.UnimplementedPortRedirectorServiceServer
-	vp         *VolumeProxy
-	ep         *SDFSEventProxy
-	iop        *FileIOProxy
-	sp         *StorageServiceProxy
-	config     string
-	pr         PortRedirectors
-	Cmp        map[int64]*grpc.ClientConn
-	pcmp       []*grpc.ClientConn
-	Dd         map[int64]ForwardEntry
-	configLock sync.RWMutex
-	listenPort string
+	vp            *VolumeProxy
+	ep            *SDFSEventProxy
+	iop           *FileIOProxy
+	sp            *StorageServiceProxy
+	config        string
+	pr            PortRedirectors
+	Cmp           map[int64]*grpc.ClientConn
+	pcmp          []*grpc.ClientConn
+	Dd            map[int64]ForwardEntry
+	configLock    sync.RWMutex
+	listenPort    string
+	portforwarder bool
+	pc            spb.PortRedirectorServiceClient
 }
 
 type ForwardEntry struct {
@@ -60,6 +62,9 @@ func (s *PortRedictor) WriteConfig() error {
 }
 
 func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRequest) (*spb.ReloadConfigResponse, error) {
+	if s.portforwarder {
+		return s.pc.ReloadConfig(ctx, req)
+	}
 	s.configLock.Lock()
 	defer s.configLock.Unlock()
 	err := s.localReadConfig()
@@ -167,7 +172,9 @@ func (s *PortRedictor) localReadConfig() error {
 }
 
 func (s *PortRedictor) GetProxyVolumes(ctx context.Context, req *spb.ProxyVolumeInfoRequest) (*spb.ProxyVolumeInfoResponse, error) {
-
+	if s.portforwarder {
+		return s.pc.GetProxyVolumes(ctx, req)
+	}
 	var vis []*spb.VolumeInfoResponse
 	for id, con := range s.vp.vc {
 
@@ -183,10 +190,14 @@ func (s *PortRedictor) GetProxyVolumes(ctx context.Context, req *spb.ProxyVolume
 	return &spb.ProxyVolumeInfoResponse{VolumeInfoResponse: vis}, nil
 }
 
-func NewPortRedirector(config string, listenPort string) *PortRedictor {
+func NewPortRedirector(config string, listenPort string, portforwarder bool, clnt *grpc.ClientConn) *PortRedictor {
 
 	sc := &PortRedictor{config: config, listenPort: listenPort}
-	if len(config) > 0 {
+	if portforwarder {
+		sc.portforwarder = true
+		sc.pc = spb.NewPortRedirectorServiceClient(clnt)
+
+	} else if len(config) > 0 {
 		sc.localReadConfig()
 		sc.localWriteConfig()
 	}

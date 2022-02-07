@@ -78,7 +78,7 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 		}
 		defer mcntxt.Release()
 	} else {
-		pf := api.NewPortRedirector(filepath, port)
+		pf := api.NewPortRedirector(filepath, port, false, nil)
 		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf, remoteTls)
 	}
 

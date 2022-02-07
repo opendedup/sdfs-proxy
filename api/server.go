@@ -119,9 +119,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	sdfs.RegisterFileIOServiceServer(server, fc)
 	sdfs.RegisterSDFSEventServiceServer(server, ec)
 	sdfs.RegisterStorageServiceServer(server, sc)
-	if pr != nil {
-		sdfs.RegisterPortRedirectorServiceServer(server, pr)
-	}
+	sdfs.RegisterPortRedirectorServiceServer(server, pr)
 	fmt.Printf("Listening on %s auth enabled %v, dedupe enabled %v\n", port, enableAuth, dedupe)
 	log.Infof("Listening on %s auth enabled %v, dedupe enabled %v\n", port, enableAuth, dedupe)
 	fmt.Println("proxy ready")

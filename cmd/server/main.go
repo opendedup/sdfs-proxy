@@ -162,7 +162,13 @@ func main() {
 				CacheSize:     *cachsize,
 				CacheAge:      *cachage,
 			}
-			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil, false)
+			con, err := pb.NewConnection(*address, *dedupe, !*nocompress, -1, *cachsize, *cachage)
+			if err != nil {
+				log.Errorf("Unable to connect to server %s : %v \n", *address, err)
+				os.Exit(3)
+			}
+			pf := api.NewPortRedirector("filepath", "port", true, con.Clnt)
+			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, pf, false)
 		} else {
 			cmp := make(map[int64]*grpc.ClientConn)
 			cmp[Connection.Volumeid] = Connection.Clnt
@@ -174,7 +180,13 @@ func main() {
 				DedupeBuffer:  *buffers,
 				CompressData:  !*nocompress,
 			}
-			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil, false)
+			con, err := pb.NewConnection(*address, *dedupe, !*nocompress, -1, *cachsize, *cachage)
+			if err != nil {
+				log.Errorf("Unable to connect to server %s : %v \n", *address, err)
+				os.Exit(3)
+			}
+			pf := api.NewPortRedirector("filepath", "port", true, con.Clnt)
+			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, pf, false)
 		}
 	}
 }
