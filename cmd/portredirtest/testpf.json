@@ -1,1 +1,56 @@
-{"port":"","forwarders":[{"pwd":"","user":"","local-auth":"","address":"sdfs://localhost:6442","trust-all":false,"mtls":false,"root-ca":"","mtls-key":"","mtls-cert":"","dedupe":false,"dedupe-threads":0,"dedupe-buffer":0,"compress":false},{"pwd":"","user":"","local-auth":"","address":"sdfs://localhost:6443","trust-all":false,"mtls":false,"root-ca":"","mtls-key":"","mtls-cert":"","dedupe":false,"dedupe-threads":0,"dedupe-buffer":0,"compress":false},{"pwd":"","user":"","local-auth":"","address":"sdfs://localhost:6444","trust-all":false,"mtls":false,"root-ca":"","mtls-key":"","mtls-cert":"","dedupe":false,"dedupe-threads":0,"dedupe-buffer":0,"compress":false}]}
+{
+ "port": "localhost:16442-16445",
+ "forwarders": [
+  {
+   "pwd": "",
+   "user": "",
+   "local-auth": "",
+   "address": "sdfs://localhost:6442",
+   "trust-all": false,
+   "mtls": false,
+   "root-ca": "",
+   "mtls-key": "",
+   "mtls-cert": "",
+   "dedupe": false,
+   "dedupe-threads": 0,
+   "dedupe-buffer": 0,
+   "compress": false,
+   "dedupe-cache-size": 0,
+   "dedupe-cache-age": 0
+  },
+  {
+   "pwd": "",
+   "user": "",
+   "local-auth": "",
+   "address": "sdfs://localhost:6443",
+   "trust-all": false,
+   "mtls": false,
+   "root-ca": "",
+   "mtls-key": "",
+   "mtls-cert": "",
+   "dedupe": false,
+   "dedupe-threads": 0,
+   "dedupe-buffer": 0,
+   "compress": false,
+   "dedupe-cache-size": 0,
+   "dedupe-cache-age": 0
+  },
+  {
+   "pwd": "",
+   "user": "",
+   "local-auth": "",
+   "address": "sdfs://localhost:6444",
+   "trust-all": false,
+   "mtls": false,
+   "root-ca": "",
+   "mtls-key": "",
+   "mtls-cert": "",
+   "dedupe": false,
+   "dedupe-threads": 0,
+   "dedupe-buffer": 0,
+   "compress": false,
+   "dedupe-cache-size": 0,
+   "dedupe-cache-age": 0
+  }
+ ]
+}

@@ -766,7 +766,7 @@ func TestUpload(t *testing.T) {
 		defer connection.CloseConnection(ctx)
 		fn := string(randBytesMaskImpr(16))
 		tn := fmt.Sprintf("/tmp/%s", fn)
-		data := randBytesMaskImpr(1024)
+		data := randBytesMaskImpr(1024 * 1024 * 16)
 		h, err := blake2b.New(32, make([]byte, 0))
 
 		assert.Nil(t, err)
@@ -774,7 +774,7 @@ func TestUpload(t *testing.T) {
 		assert.Nil(t, err)
 		h.Write(data)
 		bs := h.Sum(nil)
-		wr, err := connection.Upload(ctx, tn, fn, 1024)
+		wr, err := connection.Upload(ctx, tn, fn, 1024*1024)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(len(data)), wr)
 		nhs := readFile(t, fn, false, vid)
