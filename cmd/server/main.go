@@ -49,6 +49,8 @@ func main() {
 	threads := flag.Int("dedupe-threads", 4, "number of threads used for dedupe")
 	pfConfig := flag.String("pf-config", "", "The location of the Port forward Config")
 	logPath := flag.String("log-path", "/var/log/sdfs/", "Base Path for logs")
+	cachsize := flag.Int("dedupe-cache-size", 1000000, "Cache size for client size dedupe")
+	cachage := flag.Int("dedupe-cache-age", 30, "Maximum age for local dedupe cache")
 	flag.Parse()
 	enableAuth := false
 	log.Infof("read %v", os.Args)
@@ -112,10 +114,10 @@ func main() {
 
 	if isFlagPassed("pf-config") {
 		fmt.Printf("Reading %s\n", *pfConfig)
-		NewPortForward(*pfConfig, enableAuth, *standalone, *port, *debug, *lpwd, os.Args, *rtls, *logPath)
+		NewPortForward(*pfConfig, enableAuth, *standalone, *port, *debug, *lpwd, os.Args, *rtls, *logPath, *cachsize, *cachage)
 
 	} else {
-		Connection, err := pb.NewConnection(*address, *dedupe, !*nocompress, -1)
+		Connection, err := pb.NewConnection(*address, *dedupe, !*nocompress, -1, *cachsize, *cachage)
 		fmt.Printf("Connected to %s\n", *address)
 		if err != nil {
 			log.Errorf("Unable to connect to %s: %v\n", *address, err)
@@ -157,6 +159,8 @@ func main() {
 				DedupeThreads: *threads,
 				DedupeBuffer:  *buffers,
 				CompressData:  !*nocompress,
+				CacheSize:     *cachsize,
+				CacheAge:      *cachage,
 			}
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, nil, false)
 		} else {

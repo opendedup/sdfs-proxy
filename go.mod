@@ -8,7 +8,7 @@ require (
 	github.com/docker/go-connections v0.4.0
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/mitchellh/go-ps v1.0.0
-	github.com/opendedup/sdfs-client-go v0.1.37-0.20220206210115-2976d35b13ec
+	github.com/opendedup/sdfs-client-go v0.1.37-0.20220206234812-1b348e5afae3
 	github.com/sevlyar/go-daemon v0.1.5
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0

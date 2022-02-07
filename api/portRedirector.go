@@ -43,6 +43,8 @@ type ForwardEntry struct {
 	DedupeThreads int    `json:"dedupe-threads" default:"8"`
 	DedupeBuffer  int    `json:"dedupe-buffer" default:"4"`
 	CompressData  bool   `json:"compress"`
+	CacheSize     int    `json:"dedupe-cache-size" default:"1000000"`
+	CacheAge      int    `json:"dedupe-cache-age" default:"30"`
 }
 
 type PortRedirectors struct {
@@ -146,7 +148,7 @@ func (s *PortRedictor) localReadConfig() error {
 	cmp := make(map[int64]*grpc.ClientConn)
 	dd := make(map[int64]ForwardEntry)
 	for _, fe := range fes.ForwardEntrys {
-		Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, fe.CompressData, -1)
+		Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, fe.CompressData, -1, fe.CacheSize, fe.CacheAge)
 		if err != nil {
 			log.Errorf("Unable to connect to %s: %v\n", fe.Address, err)
 			os.Exit(5)

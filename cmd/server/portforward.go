@@ -14,7 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func NewPortForward(filepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string, remoteTls bool, logPath string) error {
+func NewPortForward(filepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string, remoteTls bool, logPath string, cachesize, cachage int) error {
 
 	args = append(args, "-s")
 
@@ -29,9 +29,10 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 	}
 	fndct := 0
 	for _, p1 := range p {
-		log.Infof("process %s", p1)
-		if p1.Executable() == "sdfs-proxy" || p1.Executable() == "sdfs.proxy-s.exe" || p1.Executable() == "sdfs.proxy.exe" {
+		log.Debugf("process %s", p1)
+		if p1.Executable() == "sdfs-proxy" || p1.Executable() == "sdfs-proxy-s.exe" {
 			fndct++
+			log.Debugf("Found SDFS Proxy %s", p1)
 		}
 	}
 	if fndct > 1 {

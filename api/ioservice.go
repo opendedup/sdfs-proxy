@@ -20,6 +20,8 @@ type FileIOProxy struct {
 	dedupe        map[int64]*dedupe.DedupeEngine
 	dedupeEnabled map[int64]ForwardEntry
 	configLock    sync.RWMutex
+	cacheSize     int
+	cacheAge      int
 }
 
 func (s *FileIOProxy) GetXAttrSize(ctx context.Context, req *spb.GetXAttrSizeRequest) (*spb.GetXAttrSizeResponse, error) {
@@ -559,7 +561,7 @@ func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, dedupeEnabled[indx].CompressData, indx)
+			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
 			if err != nil {
 				log.Printf("error initializing dedupe connection: %v\n", err)
 				return err
@@ -638,7 +640,7 @@ func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]Fo
 		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, dedupeEnabled[indx].DedupeBuffer, dedupeEnabled[indx].DedupeThreads, debug, dedupeEnabled[indx].CompressData, indx)
+			de, err := dedupe.NewDedupeEngine(ctx, clnt, dedupeEnabled[indx].DedupeBuffer, dedupeEnabled[indx].DedupeThreads, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
 			if err != nil {
 				log.Errorf("error initializing dedupe connection: %v\n", err)
 				return nil, err
