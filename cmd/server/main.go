@@ -165,7 +165,7 @@ func main() {
 			con, err := pb.NewConnection(*address, *dedupe, !*nocompress, -1, *cachsize, *cachage)
 			if err != nil {
 				log.Errorf("Unable to connect to server %s : %v \n", *address, err)
-				os.Exit(3)
+				os.Exit(5)
 			}
 			pf := api.NewPortRedirector("filepath", "port", true, con.Clnt)
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, pf, false)

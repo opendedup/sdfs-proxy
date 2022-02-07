@@ -155,11 +155,11 @@ func (s *PortRedictor) localReadConfig() error {
 	for _, fe := range fes.ForwardEntrys {
 		Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, fe.CompressData, -1, fe.CacheSize, fe.CacheAge)
 		if err != nil {
-			log.Errorf("Unable to connect to %s: %v\n", fe.Address, err)
-			os.Exit(5)
+			log.Errorf("Skipping because unable to connect to %s: %v\n", fe.Address, err)
+		} else {
+			cmp[Connection.Volumeid] = Connection.Clnt
+			dd[Connection.Volumeid] = fe
 		}
-		cmp[Connection.Volumeid] = Connection.Clnt
-		dd[Connection.Volumeid] = fe
 	}
 	s.pcmp = nil
 	for _, l := range s.Cmp {
