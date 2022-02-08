@@ -105,13 +105,19 @@ func testPort(addr string) (string, error) {
 		for i := sp; i < ep+1; i++ {
 			lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", ps[0], i))
 			if err != nil {
-				lis.Close()
+				if lis != nil {
+					lis.Close()
+				}
 				log.Warnf("failed to listen on %d : %v", i, err)
 			} else {
-				lis.Close()
+				if lis != nil {
+					lis.Close()
+				}
 				lis, err = net.Listen("tcp", fmt.Sprintf("%s:%d", "localhost", i))
 				if err == nil {
-					lis.Close()
+					if lis != nil {
+						lis.Close()
+					}
 					port := fmt.Sprintf("%s:%d", ps[0], i)
 					return port, nil
 				}
@@ -129,10 +135,14 @@ func testPort(addr string) (string, error) {
 			log.Errorf("failed to listen at %s %v", addr, err)
 			os.Exit(-11)
 		}
-		lis.Close()
+		if lis != nil {
+			lis.Close()
+		}
 		lis, err = net.Listen("tcp", fmt.Sprintf("%s:%s", "localhost", ps[1]))
 		if err == nil {
-			lis.Close()
+			if lis != nil {
+				lis.Close()
+			}
 			port := fmt.Sprintf("%s:%s", ps[0], ps[1])
 			return port, nil
 		}
