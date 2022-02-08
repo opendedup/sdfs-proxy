@@ -146,6 +146,9 @@ func testPort(addr string) (string, error) {
 			port := fmt.Sprintf("%s:%s", ps[0], ps[1])
 			return port, nil
 		}
+		if lis != nil {
+			lis.Close()
+		}
 		log.Errorf("failed to listen at %s %v", addr, err)
 		os.Exit(-11)
 
