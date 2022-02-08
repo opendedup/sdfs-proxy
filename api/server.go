@@ -141,7 +141,7 @@ func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentia
 		ctx, cancel := context.WithCancel(context.Background())
 
 		ms, err := ecc.ExportServerCertificate(ctx, &sdfs.ExportServerCertRequest{})
-		defer ecc.DeleteExportedCert(ctx, &sdfs.DeleteExportedCertRequest{})
+
 		defer cancel()
 		if err != nil {
 			return nil, err

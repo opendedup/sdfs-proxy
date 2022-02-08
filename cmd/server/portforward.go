@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 
 	ps "github.com/mitchellh/go-ps"
 	"github.com/opendedup/sdfs-proxy/api"
@@ -78,6 +80,30 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 		}
 		defer mcntxt.Release()
 	} else {
+		if runtime.GOOS == "windows" {
+			sigs := make(chan os.Signal, 1)
+			signal.Notify(sigs, syscall.SIGUSR1, syscall.SIGUSR2, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
+			// go func() {
+			// sig := <-sigs
+			// fmt.Println(sig)
+			// done <- true
+			// }()
+			go func() {
+				for s := range sigs {
+					switch s {
+					case syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT:
+						fmt.Println("got signal and try to exit: ", s)
+						do_exit()
+					case syscall.SIGUSR1:
+						fmt.Println("usr1: ", s)
+					case syscall.SIGUSR2:
+						fmt.Println("usr2: ", s)
+					default:
+						fmt.Println("other: ", s)
+					}
+				}
+			}()
+		}
 		pf := api.NewPortRedirector(filepath, port, false, nil)
 		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf, remoteTls)
 	}
@@ -130,6 +156,12 @@ func testPort(addr string) (string, error) {
 		lis.Close()
 		return addr, nil
 	}
+}
+
+func do_exit() {
+	fmt.Println("try do some clear jobs")
+	fmt.Println("run done")
+	os.Exit(0)
 }
 
 func removeIndex(s []string, index int) []string {
