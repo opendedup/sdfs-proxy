@@ -5,41 +5,22 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
-	ps "github.com/mitchellh/go-ps"
 	"github.com/opendedup/sdfs-proxy/api"
 	"github.com/sevlyar/go-daemon"
 	log "github.com/sirupsen/logrus"
 )
 
-func NewPortForward(filepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string, remoteTls bool, logPath string, cachesize, cachage int) error {
+func NewPortForward(configFilepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string, remoteTls bool, logPath string, cachesize, cachage int) error {
 
 	args = append(args, "-s")
 
 	os.MkdirAll("/var/run/sdfs/", os.ModePerm)
 	os.MkdirAll(logPath, os.ModePerm)
-	p, err := ps.Processes()
-	if err != nil {
-		log.Errorf("error while trying to check processes %v", err)
-	}
-	if len(p) <= 0 {
-		log.Errorf("should have processes during check but none found")
-	}
-	fndct := 0
-	for _, p1 := range p {
-		log.Debugf("process [%s] %v %v", p1, p1.Executable() == "sdfs-proxy-s.exe", p1.Executable() == "sdfs-proxy")
-		if p1.Executable() == "sdfs-proxy" || p1.Executable() == "sdfs-proxy-s.exe" {
-			fndct++
-			log.Debugf("Found SDFS Proxy %s ct = %d", p1.Executable(), fndct)
-		}
-	}
-	if fndct > 1 {
-		log.Errorf("sdfs-proxy already started %d times", fndct-1)
-		os.Exit(14)
-	}
 	var fn = -1
 	for i, arg := range args {
 		if arg == "-listen-port" {
@@ -80,16 +61,26 @@ func NewPortForward(filepath string, enableAuth, standalone bool, port string, d
 		defer mcntxt.Release()
 	} else {
 		if runtime.GOOS == "windows" {
+			lockFile := fmt.Sprintf("%s\\LOCK", filepath.Dir(configFilepath))
+			if _, err := os.Stat(lockFile); err == nil {
+				log.Errorf("Looks like port forwarder is already started %s exists", lockFile)
+				os.Exit(20)
+			}
+			d1 := []byte(fmt.Sprintf("%d", os.Getpid()))
+			err := os.WriteFile(lockFile, d1, 0644)
+			if err != nil {
+				log.Errorf("Unable to write lock file: %s %v \n", lockFile, err)
+			}
 			c := make(chan os.Signal, 1)
 			signal.Notify(c, os.Interrupt)
 			go func() {
 				for sig := range c {
-					do_exit(sig)
+					do_exit(lockFile, sig)
 				}
 			}()
 
 		}
-		pf := api.NewPortRedirector(filepath, port, false, nil)
+		pf := api.NewPortRedirector(configFilepath, port, false, nil)
 		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf, remoteTls)
 	}
 
@@ -135,18 +126,25 @@ func testPort(addr string) (string, error) {
 	} else {
 		lis, err := net.Listen("tcp", addr)
 		if err != nil {
-			log.Errorf("failed to listen: %v", err)
+			log.Errorf("failed to listen at %s %v", addr, err)
 			os.Exit(-11)
 		}
 		lis.Close()
-		return addr, nil
+		lis, err = net.Listen("tcp", fmt.Sprintf("%s:%s", "localhost", ps[1]))
+		if err == nil {
+			lis.Close()
+			port := fmt.Sprintf("%s:%s", ps[0], ps[1])
+			return port, nil
+		}
+		log.Errorf("failed to listen at %s %v", addr, err)
+		os.Exit(-11)
+
 	}
+	return addr, nil
 }
 
-func do_exit(sig os.Signal) {
-	fmt.Println("try do some clear jobs")
-	fmt.Println("run done")
-	fmt.Printf("Signal %s %v", sig.String(), sig)
+func do_exit(lockFile string, sig os.Signal) {
+	os.Remove(lockFile)
 	os.Exit(0)
 }
 
