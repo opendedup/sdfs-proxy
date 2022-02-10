@@ -137,6 +137,7 @@ func ReloadEncryptionClient(conn *grpc.ClientConn) error {
 }
 
 func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentials, error) {
+	var certificate tls.Certificate
 	if rtls {
 		ctx, cancel := context.WithCancel(context.Background())
 
@@ -149,8 +150,10 @@ func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentia
 			log.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
 			return nil, fmt.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
 		} else {
-			ServerCert = ms.CertChainFilePath
-			ServerKey = ms.PrivateKeyFilePath
+			certificate, err = tls.X509KeyPair(ms.CertChain, ms.PrivateKey)
+			if err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		user, err := user.Current()
@@ -166,12 +169,12 @@ func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentia
 		if len(ServerCACert) == 0 {
 			ServerCACert = user.HomeDir + "/.sdfs/ca.crt"
 		}
+		certificate, err = tls.LoadX509KeyPair(ServerCert, ServerKey)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	certificate, err := tls.LoadX509KeyPair(ServerCert, ServerKey)
-	if err != nil {
-		return nil, err
-	}
 	tlsConfig := &tls.Config{
 		ClientAuth:   tls.NoClientCert,
 		Certificates: []tls.Certificate{certificate},
