@@ -4,23 +4,51 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/signal"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 
 	"github.com/opendedup/sdfs-proxy/api"
 	"github.com/sevlyar/go-daemon"
+	"github.com/shirou/gopsutil/v3/process"
 	log "github.com/sirupsen/logrus"
 )
 
 func NewPortForward(configFilepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string, remoteTls bool, logPath string, cachesize, cachage int) error {
 
 	args = append(args, "-s")
+	if runtime.GOOS != "windows" {
+		os.MkdirAll("/var/run/sdfs/", os.ModePerm)
+		os.MkdirAll(logPath, os.ModePerm)
+	}
+	p, err := process.Processes()
+	if err != nil {
+		log.Errorf("error while trying to list processes %v", err)
+	}
+	if len(p) <= 0 {
+		log.Errorf("should have processes during check but none found")
+	}
+	fndct := 0
+	for _, p1 := range p {
+		exe, err := p1.Exe()
 
-	os.MkdirAll("/var/run/sdfs/", os.ModePerm)
-	os.MkdirAll(logPath, os.ModePerm)
+		if err != nil {
+			log.Errorf("error while trying to check exe %v", err)
+		}
+		nc, err := p1.Cmdline()
+		if err != nil {
+			log.Errorf("error while trying to check exe %v", err)
+		}
+		log.Infof("process [%v] [%s] [%s] %v %v", p1, nc, exe, exe == "sdfs-proxy-s.exe", exe == "sdfs-proxy")
+		if exe == "sdfs-proxy" || exe == "sdfs-proxy-s.exe" {
+			fndct++
+			log.Debugf("Found SDFS Proxy %s ct = %d", exe, fndct)
+		}
+	}
+	if fndct > 1 {
+		log.Errorf("sdfs-proxy already started %d times", fndct-1)
+		os.Exit(14)
+	}
 	var fn = -1
 	for i, arg := range args {
 		if arg == "-listen-port" {
@@ -61,23 +89,6 @@ func NewPortForward(configFilepath string, enableAuth, standalone bool, port str
 		defer mcntxt.Release()
 	} else {
 		if runtime.GOOS == "windows" {
-			lockFile := fmt.Sprintf("%s\\LOCK", filepath.Dir(configFilepath))
-			if _, err := os.Stat(lockFile); err == nil {
-				log.Errorf("Looks like port forwarder is already started %s exists", lockFile)
-				os.Exit(20)
-			}
-			d1 := []byte(fmt.Sprintf("%d", os.Getpid()))
-			err := os.WriteFile(lockFile, d1, 0644)
-			if err != nil {
-				log.Errorf("Unable to write lock file: %s %v \n", lockFile, err)
-			}
-			c := make(chan os.Signal, 1)
-			signal.Notify(c, os.Interrupt)
-			go func() {
-				for sig := range c {
-					do_exit(lockFile, sig)
-				}
-			}()
 
 		}
 		pf := api.NewPortRedirector(configFilepath, port, false, nil)
@@ -154,11 +165,6 @@ func testPort(addr string) (string, error) {
 
 	}
 	return addr, nil
-}
-
-func do_exit(lockFile string, sig os.Signal) {
-	os.Remove(lockFile)
-	os.Exit(0)
 }
 
 func removeIndex(s []string, index int) []string {
