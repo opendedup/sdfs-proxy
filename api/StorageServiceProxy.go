@@ -41,6 +41,7 @@ func (s *StorageServiceProxy) CheckHashes(ctx context.Context, req *spb.CheckHas
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
+		log.Infof("CheckHashes using volume %d %d", volid, req.PvolumeID)
 		return val.CheckHashes(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
@@ -57,6 +58,7 @@ func (s *StorageServiceProxy) WriteChunks(ctx context.Context, req *spb.WriteChu
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
+		log.Infof("WriteChunks using default volume %d %d", volid, req.PvolumeID)
 		return val.WriteChunks(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
@@ -88,6 +90,7 @@ func (s *StorageServiceProxy) WriteSparseDataChunk(ctx context.Context, req *spb
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
+		log.Infof("WriteSparseDataChunk using volume %d %d", volid, req.PvolumeID)
 		return val.WriteSparseDataChunk(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
