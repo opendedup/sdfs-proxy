@@ -31,17 +31,14 @@ func NewPortForward(configFilepath string, enableAuth, standalone bool, port str
 	fndct := 0
 	for _, p1 := range p {
 		exe, err := p1.Exe()
-
 		if err != nil {
-			log.Errorf("error while trying to check exe %v", err)
+			log.Debugf("error while trying to check exe %v", err)
 		}
 		nc, err := p1.Cmdline()
 		if err != nil {
-			log.Errorf("error while trying to check commandline %v", err)
+			log.Debugf("error while trying to check commandline %v", err)
 		}
 		if strings.Contains(exe, "sdfs-proxy") && strings.Contains(nc, "-pf-config") {
-			log.Infof("process [%v] [%s] [%s] %v %v", p1, nc, exe, exe == "sdfs-proxy-s.exe", exe == "sdfs-proxy")
-
 			fndct++
 			log.Infof("Found SDFS Proxy %s ct = %d", exe, fndct)
 		}
