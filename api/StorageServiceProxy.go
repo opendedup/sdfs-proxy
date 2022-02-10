@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -36,6 +37,7 @@ func (s *StorageServiceProxy) CheckHashes(ctx context.Context, req *spb.CheckHas
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
+		log.Errorf("CheckHashes using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
@@ -51,6 +53,7 @@ func (s *StorageServiceProxy) WriteChunks(ctx context.Context, req *spb.WriteChu
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
+		log.Errorf("WriteChunks using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
@@ -66,6 +69,7 @@ func (s *StorageServiceProxy) ReadChunks(ctx context.Context, req *spb.ReadChunk
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
+		log.Errorf("ReadChunks using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
@@ -80,6 +84,7 @@ func (s *StorageServiceProxy) WriteSparseDataChunk(ctx context.Context, req *spb
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
+		log.Errorf("WriteSparseDataChunk using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
@@ -94,6 +99,7 @@ func (s *StorageServiceProxy) ReadSparseDataChunk(ctx context.Context, req *spb.
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
+		log.Errorf("ReadSparseDataChunk using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
