@@ -101,7 +101,7 @@ func (s *FileIOProxy) Utime(ctx context.Context, req *spb.UtimeRequest) (*spb.Ut
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
-	if s.proxy || volid == 0 || volid == -1 {
+	if volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
 	if val, ok := s.fc[volid]; ok {
@@ -113,12 +113,12 @@ func (s *FileIOProxy) Utime(ctx context.Context, req *spb.UtimeRequest) (*spb.Ut
 
 func (s *FileIOProxy) Truncate(ctx context.Context, req *spb.TruncateRequest) (*spb.TruncateResponse, error) {
 	volid := req.PvolumeID
-	if s.proxy || volid == 0 || volid == -1 {
+	if volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.Path, volid)
+			dval.SyncFile(req.Path, req.PvolumeID)
 		}
 
 		return val.Truncate(ctx, req)
@@ -263,7 +263,7 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 					log.Error(err)
 					return nil, err
 				}
-				err = dval.Write(req.FileHandle, req.Start, out, req.Len, volid)
+				err = dval.Write(req.FileHandle, req.Start, out, req.Len, req.PvolumeID)
 				if err != nil {
 					log.Errorf("error writing %v", err)
 					return nil, err
@@ -271,7 +271,7 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 					return &spb.DataWriteResponse{}, nil
 				}
 			} else {
-				err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len, volid)
+				err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len, req.PvolumeID)
 				if err != nil {
 					log.Errorf("error writing %v", err)
 					return nil, err
@@ -303,7 +303,7 @@ func (s *FileIOProxy) Read(ctx context.Context, req *spb.DataReadRequest) (*spb.
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.Sync(req.FileHandle, volid)
+			dval.Sync(req.FileHandle, req.PvolumeID)
 		}
 		return val.Read(ctx, req)
 	} else {
@@ -320,7 +320,7 @@ func (s *FileIOProxy) Release(ctx context.Context, req *spb.FileCloseRequest) (*
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.Close(req.FileHandle, volid)
+			dval.Close(req.FileHandle, req.PvolumeID)
 		}
 		return val.Release(ctx, req)
 	} else {
@@ -383,7 +383,7 @@ func (s *FileIOProxy) GetFileInfo(ctx context.Context, req *spb.FileInfoRequest)
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.FileName, volid)
+			dval.SyncFile(req.FileName, req.PvolumeID)
 		}
 		return val.GetFileInfo(ctx, req)
 	} else {
@@ -400,8 +400,8 @@ func (s *FileIOProxy) CreateCopy(ctx context.Context, req *spb.FileSnapshotReque
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.Src, volid)
-			dval.SyncFile(req.Dest, volid)
+			dval.SyncFile(req.Src, req.PvolumeID)
+			dval.SyncFile(req.Dest, req.PvolumeID)
 		}
 		return val.CreateCopy(ctx, req)
 	} else {
@@ -463,8 +463,8 @@ func (s *FileIOProxy) Rename(ctx context.Context, req *spb.FileRenameRequest) (*
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.CloseFile(req.Src, volid)
-			dval.CloseFile(req.Dest, volid)
+			dval.CloseFile(req.Src, req.PvolumeID)
+			dval.CloseFile(req.Dest, req.PvolumeID)
 		}
 		return val.Rename(ctx, req)
 	} else {
@@ -481,8 +481,8 @@ func (s *FileIOProxy) CopyExtent(ctx context.Context, req *spb.CopyExtentRequest
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.SrcFile, volid)
-			dval.SyncFile(req.DstFile, volid)
+			dval.SyncFile(req.SrcFile, req.PvolumeID)
+			dval.SyncFile(req.DstFile, req.PvolumeID)
 		}
 		return val.CopyExtent(ctx, req)
 	} else {
