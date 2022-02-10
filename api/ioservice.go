@@ -44,7 +44,7 @@ func (s *FileIOProxy) Fsync(ctx context.Context, req *spb.FsyncRequest) (*spb.Fs
 		volid = s.dfc
 	}
 	if s.dedupeEnabled[volid].Dedupe {
-		s.dedupe[volid].SyncFile(req.Path)
+		s.dedupe[volid].SyncFile(req.Path, volid)
 	}
 	if val, ok := s.fc[volid]; ok {
 		return val.Fsync(ctx, req)
@@ -118,7 +118,7 @@ func (s *FileIOProxy) Truncate(ctx context.Context, req *spb.TruncateRequest) (*
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.Path)
+			dval.SyncFile(req.Path, volid)
 		}
 
 		return val.Truncate(ctx, req)
@@ -149,7 +149,7 @@ func (s *FileIOProxy) GetAttr(ctx context.Context, req *spb.StatRequest) (*spb.S
 		volid = s.dfc
 	}
 	if s.dedupeEnabled[volid].Dedupe {
-		s.dedupe[volid].SyncFile(req.Path)
+		s.dedupe[volid].SyncFile(req.Path, volid)
 	}
 	if val, ok := s.fc[volid]; ok {
 		return val.GetAttr(ctx, req)
@@ -181,7 +181,7 @@ func (s *FileIOProxy) Flush(ctx context.Context, req *spb.FlushRequest) (*spb.Fl
 		volid = s.dfc
 	}
 	if s.dedupeEnabled[volid].Dedupe {
-		s.dedupe[volid].Sync(req.Fd)
+		s.dedupe[volid].Sync(req.Fd, volid)
 	}
 	if val, ok := s.fc[volid]; ok {
 		return val.Flush(ctx, req)
@@ -263,7 +263,7 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 					log.Error(err)
 					return nil, err
 				}
-				err = dval.Write(req.FileHandle, req.Start, out, req.Len)
+				err = dval.Write(req.FileHandle, req.Start, out, req.Len, volid)
 				if err != nil {
 					log.Errorf("error writing %v", err)
 					return nil, err
@@ -271,7 +271,7 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 					return &spb.DataWriteResponse{}, nil
 				}
 			} else {
-				err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len)
+				err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len, volid)
 				if err != nil {
 					log.Errorf("error writing %v", err)
 					return nil, err
@@ -303,7 +303,7 @@ func (s *FileIOProxy) Read(ctx context.Context, req *spb.DataReadRequest) (*spb.
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.Sync(req.FileHandle)
+			dval.Sync(req.FileHandle, volid)
 		}
 		return val.Read(ctx, req)
 	} else {
@@ -320,7 +320,7 @@ func (s *FileIOProxy) Release(ctx context.Context, req *spb.FileCloseRequest) (*
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.Close(req.FileHandle)
+			dval.Close(req.FileHandle, volid)
 		}
 		return val.Release(ctx, req)
 	} else {
@@ -383,7 +383,7 @@ func (s *FileIOProxy) GetFileInfo(ctx context.Context, req *spb.FileInfoRequest)
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.FileName)
+			dval.SyncFile(req.FileName, volid)
 		}
 		return val.GetFileInfo(ctx, req)
 	} else {
@@ -400,8 +400,8 @@ func (s *FileIOProxy) CreateCopy(ctx context.Context, req *spb.FileSnapshotReque
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.Src)
-			dval.SyncFile(req.Dest)
+			dval.SyncFile(req.Src, volid)
+			dval.SyncFile(req.Dest, volid)
 		}
 		return val.CreateCopy(ctx, req)
 	} else {
@@ -446,7 +446,7 @@ func (s *FileIOProxy) Stat(ctx context.Context, req *spb.FileInfoRequest) (*spb.
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.FileName)
+			dval.SyncFile(req.FileName, volid)
 		}
 		return val.Stat(ctx, req)
 	} else {
@@ -463,8 +463,8 @@ func (s *FileIOProxy) Rename(ctx context.Context, req *spb.FileRenameRequest) (*
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.CloseFile(req.Src)
-			dval.CloseFile(req.Dest)
+			dval.CloseFile(req.Src, volid)
+			dval.CloseFile(req.Dest, volid)
 		}
 		return val.Rename(ctx, req)
 	} else {
@@ -481,8 +481,8 @@ func (s *FileIOProxy) CopyExtent(ctx context.Context, req *spb.CopyExtentRequest
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.SrcFile)
-			dval.SyncFile(req.DstFile)
+			dval.SyncFile(req.SrcFile, volid)
+			dval.SyncFile(req.DstFile, volid)
 		}
 		return val.CopyExtent(ctx, req)
 	} else {
