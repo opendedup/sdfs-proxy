@@ -167,6 +167,7 @@ func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentia
 			ServerCACert = user.HomeDir + "/.sdfs/ca.crt"
 		}
 	}
+
 	certificate, err := tls.LoadX509KeyPair(ServerCert, ServerKey)
 	if err != nil {
 		return nil, err
