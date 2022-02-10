@@ -37,11 +37,11 @@ func (s *StorageServiceProxy) CheckHashes(ctx context.Context, req *spb.CheckHas
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Errorf("CheckHashes using default volume %d", volid)
+		log.Debugf("CheckHashes using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
-		log.Infof("CheckHashes using volume %d %d", volid, req.PvolumeID)
+		log.Debugf("CheckHashes using volume %d %d", volid, req.PvolumeID)
 		return val.CheckHashes(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
@@ -54,11 +54,11 @@ func (s *StorageServiceProxy) WriteChunks(ctx context.Context, req *spb.WriteChu
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Errorf("WriteChunks using default volume %d", volid)
+		log.Debugf("WriteChunks using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
-		log.Infof("WriteChunks using default volume %d %d", volid, req.PvolumeID)
+		log.Debugf("WriteChunks using default volume %d %d", volid, req.PvolumeID)
 		return val.WriteChunks(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
@@ -71,7 +71,7 @@ func (s *StorageServiceProxy) ReadChunks(ctx context.Context, req *spb.ReadChunk
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Errorf("ReadChunks using default volume %d", volid)
+		log.Debugf("ReadChunks using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
@@ -86,11 +86,11 @@ func (s *StorageServiceProxy) WriteSparseDataChunk(ctx context.Context, req *spb
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Errorf("WriteSparseDataChunk using default volume %d", volid)
+		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
-		log.Infof("WriteSparseDataChunk using volume %d %d", volid, req.PvolumeID)
+		log.Debugf("WriteSparseDataChunk using volume %d %d", volid, req.PvolumeID)
 		return val.WriteSparseDataChunk(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
@@ -102,7 +102,7 @@ func (s *StorageServiceProxy) ReadSparseDataChunk(ctx context.Context, req *spb.
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Errorf("ReadSparseDataChunk using default volume %d", volid)
+		log.Debugf("ReadSparseDataChunk using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
