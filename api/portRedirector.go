@@ -190,8 +190,10 @@ func (s *PortRedictor) GetProxyVolumes(ctx context.Context, req *spb.ProxyVolume
 	return &spb.ProxyVolumeInfoResponse{VolumeInfoResponse: vis}, nil
 }
 
-func NewPortRedirector(config string, listenPort string, portforwarder bool, clnt *grpc.ClientConn) *PortRedictor {
-
+func NewPortRedirector(config string, listenPort string, portforwarder bool, clnt *grpc.ClientConn, debug bool) *PortRedictor {
+	if debug {
+		log.SetLevel(log.DebugLevel)
+	}
 	sc := &PortRedictor{config: config, listenPort: listenPort}
 	if portforwarder {
 		sc.portforwarder = true

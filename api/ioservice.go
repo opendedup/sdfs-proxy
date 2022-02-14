@@ -631,6 +631,9 @@ func (s *FileIOProxy) GetRetrievalTier(ctx context.Context, req *spb.GetRetrieva
 func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]ForwardEntry, proxy, debug bool) (*FileIOProxy, error) {
 	fcm := make(map[int64]spb.FileIOServiceClient)
 	dd := make(map[int64]*dedupe.DedupeEngine)
+	if debug {
+		log.SetLevel(log.DebugLevel)
+	}
 	var defaultVolume int64
 	for indx, clnt := range clnts {
 		vc := spb.NewFileIOServiceClient(clnt)

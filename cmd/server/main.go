@@ -167,7 +167,7 @@ func main() {
 				log.Errorf("Unable to connect to server %s : %v \n", *address, err)
 				os.Exit(5)
 			}
-			pf := api.NewPortRedirector("filepath", "port", true, con.Clnt)
+			pf := api.NewPortRedirector("filepath", "port", true, con.Clnt, *debug)
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, pf, false)
 		} else {
 			cmp := make(map[int64]*grpc.ClientConn)
@@ -185,7 +185,7 @@ func main() {
 				log.Errorf("Unable to connect to server %s : %v \n", *address, err)
 				os.Exit(3)
 			}
-			pf := api.NewPortRedirector("filepath", "port", true, con.Clnt)
+			pf := api.NewPortRedirector("filepath", "port", true, con.Clnt, *debug)
 			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, pf, false)
 		}
 	}

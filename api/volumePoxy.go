@@ -282,7 +282,10 @@ func (s *VolumeProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, debug bo
 	return nil
 }
 
-func NewVolumeProxy(clnts map[int64]*grpc.ClientConn, password string, proxy bool) *VolumeProxy {
+func NewVolumeProxy(clnts map[int64]*grpc.ClientConn, password string, proxy, debug bool) *VolumeProxy {
+	if debug {
+		log.SetLevel(log.DebugLevel)
+	}
 	vcm := make(map[int64]spb.VolumeServiceClient)
 	var defaultVolume int64
 	for indx, clnt := range clnts {

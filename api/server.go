@@ -45,6 +45,9 @@ var ecc sdfs.EncryptionServiceClient
 func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor, remoteServerCert bool) {
 	password = pwd
 	authenticate = enableAuth
+	if debug {
+		log.SetLevel(log.DebugLevel)
+	}
 	fc, err := NewFileIOProxy(Connections, dedupe, proxy, debug)
 	if err != nil {
 		log.Errorf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
@@ -58,9 +61,9 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 		}
 
 	}
-	vc := NewVolumeProxy(Connections, pwd, proxy)
-	ec := NewEventProxy(Connections, proxy)
-	sc := NewStorageService(Connections, proxy)
+	vc := NewVolumeProxy(Connections, pwd, proxy, debug)
+	ec := NewEventProxy(Connections, proxy, debug)
+	sc := NewStorageService(Connections, proxy, debug)
 	if pr != nil {
 		pr.iop = fc
 		pr.ep = ec

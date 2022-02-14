@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -90,7 +91,10 @@ func (s *SDFSEventProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, debug
 	return nil
 }
 
-func NewEventProxy(clnts map[int64]*grpc.ClientConn, proxy bool) *SDFSEventProxy {
+func NewEventProxy(clnts map[int64]*grpc.ClientConn, proxy, debug bool) *SDFSEventProxy {
+	if debug {
+		log.SetLevel(log.DebugLevel)
+	}
 	vcm := make(map[int64]spb.SDFSEventServiceClient)
 	var defaultVolume int64
 	for indx, clnt := range clnts {

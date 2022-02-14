@@ -184,7 +184,10 @@ func (s *StorageServiceProxy) GetSparseDedupeFile(req *spb.SparseDedupeFileReque
 	}
 }
 
-func NewStorageService(clnts map[int64]*grpc.ClientConn, proxy bool) *StorageServiceProxy {
+func NewStorageService(clnts map[int64]*grpc.ClientConn, proxy, debug bool) *StorageServiceProxy {
+	if debug {
+		log.SetLevel(log.DebugLevel)
+	}
 	vcm := make(map[int64]spb.StorageServiceClient)
 	var defaultVolume int64
 	for indx, clnt := range clnts {
