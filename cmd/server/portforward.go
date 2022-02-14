@@ -38,7 +38,12 @@ func NewPortForward(configFilepath string, enableAuth, standalone bool, port str
 		if err != nil {
 			log.Debugf("error while trying to check commandline %v", err)
 		}
-		if strings.Contains(exe, "sdfs-proxy") && strings.Contains(nc, "-pf-config") {
+		if runtime.GOOS == "windows" {
+			if strings.Contains(exe, "sdfs-proxy-s") && strings.Contains(nc, "-pf-config") {
+				fndct++
+				log.Infof("Found SDFS Proxy %s ct = %d", exe, fndct)
+			}
+		} else if strings.Contains(exe, "sdfs-proxy") && strings.Contains(nc, "-pf-config") {
 			fndct++
 			log.Infof("Found SDFS Proxy %s ct = %d", exe, fndct)
 		}
@@ -86,9 +91,6 @@ func NewPortForward(configFilepath string, enableAuth, standalone bool, port str
 		}
 		defer mcntxt.Release()
 	} else {
-		if runtime.GOOS == "windows" {
-
-		}
 		pf := api.NewPortRedirector(configFilepath, port, false, nil)
 		api.StartServer(pf.Cmp, port, enableAuth, pf.Dd, false, debug, lpwd, pf, remoteTls)
 	}
