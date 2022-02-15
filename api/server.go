@@ -147,11 +147,12 @@ func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentia
 	var certificate tls.Certificate
 	if rtls {
 		var err error
-		ctx, cancel := context.WithCancel(context.Background())
+
 		for _, clnt := range ecc {
+			ctx, cancel := context.WithCancel(context.Background())
 			ms, err := clnt.ExportServerCertificate(ctx, &sdfs.ExportServerCertRequest{})
 
-			defer cancel()
+			cancel()
 			if ms.GetErrorCode() > 0 {
 				log.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
 				return nil, fmt.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
