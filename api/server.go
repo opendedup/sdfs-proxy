@@ -40,7 +40,7 @@ var ServerCACert string
 var ServerCert string
 var serverConfigLock sync.RWMutex
 var remoteTLS bool
-var ecc sdfs.EncryptionServiceClient
+var ecc []sdfs.EncryptionServiceClient
 
 func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor, remoteServerCert bool) {
 	password = pwd
@@ -55,9 +55,8 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	}
 	if remoteServerCert {
 		remoteTLS = true
-		for _, clnt := range Connections {
-			ecc = sdfs.NewEncryptionServiceClient(clnt)
-			break
+		for i, clnt := range Connections {
+			ecc[i] = sdfs.NewEncryptionServiceClient(clnt)
 		}
 
 	}
@@ -132,31 +131,36 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	}
 }
 
-func ReloadEncryptionClient(conn *grpc.ClientConn) error {
+func ReloadEncryptionClient(conn []*grpc.ClientConn) error {
 	serverConfigLock.Lock()
 	defer serverConfigLock.Unlock()
-	ecc = sdfs.NewEncryptionServiceClient(conn)
+	for i, clnt := range conn {
+		ecc[i] = sdfs.NewEncryptionServiceClient(clnt)
+	}
 	return nil
 }
 
 func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentials, error) {
 	var certificate tls.Certificate
 	if rtls {
+		var err error
 		ctx, cancel := context.WithCancel(context.Background())
+		for _, clnt := range ecc {
+			ms, err := clnt.ExportServerCertificate(ctx, &sdfs.ExportServerCertRequest{})
 
-		ms, err := ecc.ExportServerCertificate(ctx, &sdfs.ExportServerCertRequest{})
-
-		defer cancel()
+			defer cancel()
+			if ms.GetErrorCode() > 0 {
+				log.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
+				return nil, fmt.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
+			} else {
+				certificate, err = tls.X509KeyPair(ms.CertChain, ms.PrivateKey)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
 		if err != nil {
 			return nil, err
-		} else if ms.GetErrorCode() > 0 {
-			log.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
-			return nil, fmt.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
-		} else {
-			certificate, err = tls.X509KeyPair(ms.CertChain, ms.PrivateKey)
-			if err != nil {
-				return nil, err
-			}
 		}
 	} else {
 		user, err := user.Current()
@@ -223,7 +227,13 @@ func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 		if remoteTLS {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			accept, err := ecc.ValidateCertificate(ctx, &sdfs.EncryptionKeyVerifyRequest{Hash: hashs})
+			var accept *sdfs.EncryptionKeyVerifyResponse
+			for _, cl := range ecc {
+				accept, err = cl.ValidateCertificate(ctx, &sdfs.EncryptionKeyVerifyRequest{Hash: hashs})
+				if err == nil {
+					break
+				}
+			}
 			log.Debugf("Fingerprint: %s, accept: %v", hashs, accept)
 
 			log.Debug(cert.DNSNames, cert.Subject)
