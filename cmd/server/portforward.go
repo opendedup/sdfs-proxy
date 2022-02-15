@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/opendedup/sdfs-proxy/api"
 	"github.com/sevlyar/go-daemon"
@@ -29,8 +30,11 @@ func NewPortForward(configFilepath string, enableAuth, standalone bool, port str
 		log.Errorf("should have processes during check but none found")
 	}
 	fndct := 0
+	ctime := time.Now().Unix()
+	var cmdline string
 	for _, p1 := range p {
 		exe, err := p1.Exe()
+
 		if err != nil {
 			log.Debugf("error while trying to check exe %v", err)
 		}
@@ -42,14 +46,28 @@ func NewPortForward(configFilepath string, enableAuth, standalone bool, port str
 			if strings.Contains(exe, "sdfs-proxy-s") && strings.Contains(nc, "-pf-config") {
 				fndct++
 				log.Infof("Found SDFS Proxy %s ct = %d", exe, fndct)
+				ct, _ := p1.CreateTime()
+				if ct < ctime {
+					ctime = ct
+					cmdline = nc
+
+				}
 			}
 		} else if strings.Contains(exe, "sdfs-proxy") && strings.Contains(nc, "-pf-config") {
 			fndct++
 			log.Infof("Found SDFS Proxy %s ct = %d", exe, fndct)
+			log.Infof("SDFS Command Line is %s", nc, fndct)
+			ct, _ := p1.CreateTime()
+			if ct < ctime {
+				ctime = ct
+				cmdline = nc
+
+			}
 		}
 	}
 	if fndct > 1 {
 		log.Errorf("sdfs-proxy already started %d times", fndct-1)
+		log.Errorf("cmd %s", cmdline)
 		os.Exit(14)
 	}
 	var fn = -1
