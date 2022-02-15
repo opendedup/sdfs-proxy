@@ -151,7 +151,6 @@ func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentia
 		for _, clnt := range ecc {
 			ctx, cancel := context.WithCancel(context.Background())
 			ms, err := clnt.ExportServerCertificate(ctx, &sdfs.ExportServerCertRequest{})
-
 			cancel()
 			if ms.GetErrorCode() > 0 {
 				log.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)

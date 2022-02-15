@@ -46,6 +46,7 @@ func NewPortForward(configFilepath string, enableAuth, standalone bool, port str
 			if strings.Contains(exe, "sdfs-proxy-s") && strings.Contains(nc, "-pf-config") {
 				fndct++
 				log.Infof("Found SDFS Proxy %s ct = %d", exe, fndct)
+				log.Infof("SDFS Command Line is %s", nc)
 				ct, _ := p1.CreateTime()
 				if ct < ctime {
 					ctime = ct
@@ -56,7 +57,7 @@ func NewPortForward(configFilepath string, enableAuth, standalone bool, port str
 		} else if strings.Contains(exe, "sdfs-proxy") && strings.Contains(nc, "-pf-config") {
 			fndct++
 			log.Infof("Found SDFS Proxy %s ct = %d", exe, fndct)
-			log.Infof("SDFS Command Line is %s", nc, fndct)
+			log.Infof("SDFS Command Line is %s", nc)
 			ct, _ := p1.CreateTime()
 			if ct < ctime {
 				ctime = ct

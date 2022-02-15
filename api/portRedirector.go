@@ -87,7 +87,14 @@ func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRe
 	if err != nil {
 		return nil, err
 	}
-	err = ReloadEncryptionClient(s.pcmp)
+	cons := make([]*grpc.ClientConn, 0)
+
+	for _, l := range s.Cmp {
+		cons = append(cons, l)
+	}
+
+	err = ReloadEncryptionClient(cons)
+
 	if err != nil {
 		return nil, err
 	}
