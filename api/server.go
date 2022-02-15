@@ -55,8 +55,11 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	}
 	if remoteServerCert {
 		remoteTLS = true
-		for i, clnt := range Connections {
+		var i int
+		ecc = make([]sdfs.EncryptionServiceClient, len(Connections))
+		for _, clnt := range Connections {
 			ecc[i] = sdfs.NewEncryptionServiceClient(clnt)
+			i++
 		}
 
 	}
