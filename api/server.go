@@ -137,6 +137,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 func ReloadEncryptionClient(conn []*grpc.ClientConn) error {
 	serverConfigLock.Lock()
 	defer serverConfigLock.Unlock()
+	ecc = make([]sdfs.EncryptionServiceClient, len(conn))
 	for i, clnt := range conn {
 		ecc[i] = sdfs.NewEncryptionServiceClient(clnt)
 	}
