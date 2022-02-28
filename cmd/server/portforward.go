@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"os"
 	"runtime"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/opendedup/sdfs-proxy/api"
 	"github.com/sevlyar/go-daemon"
@@ -30,7 +30,7 @@ func NewPortForward(configFilepath string, enableAuth, standalone bool, port str
 		log.Errorf("should have processes during check but none found")
 	}
 	fndct := 0
-	ctime := time.Now().Unix()
+	ctime := int64(math.MaxInt64)
 	var cmdline string
 	for _, p1 := range p {
 		exe, err := p1.Exe()
@@ -51,7 +51,6 @@ func NewPortForward(configFilepath string, enableAuth, standalone bool, port str
 				if ct < ctime {
 					ctime = ct
 					cmdline = nc
-
 				}
 			}
 		} else if strings.Contains(exe, "sdfs-proxy") && strings.Contains(nc, "-pf-config") {
