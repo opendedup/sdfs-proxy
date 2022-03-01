@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -154,12 +155,21 @@ func (s *PortRedictor) localReadConfig() error {
 	cmp := make(map[int64]*grpc.ClientConn)
 	dd := make(map[int64]ForwardEntry)
 	for _, fe := range fes.ForwardEntrys {
-		Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, fe.CompressData, -1, fe.CacheSize, fe.CacheAge)
+		for i := 1; i < 5; i++ {
+			Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, fe.CompressData, -1, fe.CacheSize, fe.CacheAge)
+
+			if err == nil {
+				log.Infof("added %d", Connection.Volumeid)
+				cmp[Connection.Volumeid] = Connection.Clnt
+				dd[Connection.Volumeid] = fe
+				break
+			} else {
+				time.Sleep(15 * time.Second)
+				log.Errorf("Retry because unable to connect to %s: %v\n", fe.Address, err)
+			}
+		}
 		if err != nil {
 			log.Errorf("Skipping because unable to connect to %s: %v\n", fe.Address, err)
-		} else {
-			cmp[Connection.Volumeid] = Connection.Clnt
-			dd[Connection.Volumeid] = fe
 		}
 	}
 	s.pcmp = nil
@@ -185,6 +195,7 @@ func (s *PortRedictor) GetProxyVolumes(ctx context.Context, req *spb.ProxyVolume
 		} else if id != vi.SerialNumber {
 			log.Warnf("Returned Volume Serial Number %d does not match locally recored %d\n", vi.SerialNumber, id)
 		} else {
+			log.Infof("getp added %d", vi.SerialNumber)
 			vis = append(vis, vi)
 		}
 	}

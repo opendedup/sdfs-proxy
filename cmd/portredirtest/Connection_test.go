@@ -1045,6 +1045,7 @@ func TestReloadProxyVolume(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	connection := connect(t, false, -1)
+	defer connection.CloseConnection(ctx)
 	_, err = connection.ReloadProxyConfig(ctx)
 	assert.Nil(t, err)
 	vis, err := connection.GetProxyVolumes(ctx)
@@ -1053,7 +1054,7 @@ func TestReloadProxyVolume(t *testing.T) {
 	}
 	assert.Nil(t, err)
 	for _, vi := range vis.VolumeInfoResponse {
-		t.Logf("serial = %d", vi.SerialNumber)
+		//t.Logf("serial = %d", vi.SerialNumber)
 		uploadTest(ctx, t, vi.SerialNumber)
 	}
 	assert.Equal(t, 2, len(vis.VolumeInfoResponse))
@@ -1076,7 +1077,7 @@ func TestReloadProxyVolume(t *testing.T) {
 	var vids []int64
 	for _, vi := range vis.VolumeInfoResponse {
 		vids = append(vids, vi.SerialNumber)
-		t.Logf("serial = %d", vi.SerialNumber)
+		//t.Logf("serial = %d", vi.SerialNumber)
 		uploadTest(ctx, t, vi.SerialNumber)
 	}
 	assert.ElementsMatch(t, vids, volumeIds)
@@ -1087,14 +1088,14 @@ func TestMain(m *testing.M) {
 
 	rand.Seed(time.Now().UTC().UnixNano())
 	var cli *client.Client
-	var containernames []string
 	var err error
 	var port = 2
 	cmp := make(map[int64]*grpc.ClientConn)
 	dd := make(map[int64]paip.ForwardEntry)
+	var containernames []string
 
 	if runtime.GOOS != "windows" {
-		for port < 5 {
+		for port < 4 {
 			cli, err = client.NewClientWithOpts(client.FromEnv)
 			if err != nil {
 				fmt.Printf("Unable to create docker client %v", err)
@@ -1104,7 +1105,6 @@ func TestMain(m *testing.M) {
 			cli.NegotiateAPIVersion(ctx)
 			portopening := fmt.Sprintf("644%d", port)
 			containername := fmt.Sprintf("portredirsdfs-%s", portopening)
-			containernames = append(containernames, containername)
 
 			inputEnv := []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
 
@@ -1115,9 +1115,30 @@ func TestMain(m *testing.M) {
 				fmt.Printf("Unable to create docker client %v", err)
 			}
 			maddress = append(maddress, fmt.Sprintf("sdfs://localhost:644%d", port))
-
+			containernames = append(containernames, containername)
 			port++
 		}
+		cli, err = client.NewClientWithOpts(client.FromEnv)
+		if err != nil {
+			fmt.Printf("Unable to create docker client %v", err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		cli.NegotiateAPIVersion(ctx)
+		portopening := fmt.Sprintf("644%d", port)
+		containername := fmt.Sprintf("portredirsdfs-%s", portopening)
+
+		inputEnv := []string{"TYPE=azure", fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("BUCKET_NAME=%s", os.Getenv("AZURE_BUCKET_NAME")), fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("SECRET_KEY=%s", os.Getenv("AZURE_SECRET_KEY")), fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 "}
+
+		inputEnv = append(inputEnv, "DISABLE_TLS=true")
+		cmd := []string{}
+		_, err = runContainer(cli, imagename, containername, portopening, "6442", inputEnv, cmd)
+		if err != nil {
+			fmt.Printf("Unable to create docker client %v", err)
+		}
+		maddress = append(maddress, fmt.Sprintf("sdfs://localhost:644%d", port))
+		containernames = append(containernames, containername)
+
 	}
 	api.DisableTrust = true
 	portR := &paip.PortRedirectors{}
@@ -1160,7 +1181,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Printf("Unable to write portredirectors to file %v", err)
 	}
-	pf := paip.NewPortRedirector("testpf.json", lport, false, nil, true)
+	pf := paip.NewPortRedirector("testpf.json", lport, false, nil, false)
 	pf.Cmp = cmp
 	pf.Dd = dd
 	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
@@ -1254,13 +1275,11 @@ func TestMain(m *testing.M) {
 	code = m.Run()
 	fmt.Printf("AnyCert MTLS Testing code is %d\n", code)
 	paip.StopServer()
-	/*
-		if runtime.GOOS != "windows" {
-			for _, containername := range containernames {
-				stopAndRemoveContainer(cli, containername)
-			}
+	if runtime.GOOS != "windows" {
+		for _, containername := range containernames {
+			stopAndRemoveContainer(cli, containername)
 		}
-	*/
+	}
 	os.Exit(code)
 }
 
@@ -1504,7 +1523,7 @@ func deleteFile(t *testing.T, fn string, volumeId int64) {
 func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 
 	//api.DisableTrust = true
-	api.Debug = true
+	api.Debug = false
 	api.UserName = "admin"
 	api.Password = "admin"
 	api.Mtls = false
@@ -1525,13 +1544,14 @@ func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 		t.Errorf("Unable to connect to %s error: %v\n", address, err)
 		return nil
 	}
+	t.Logf("Connection state %s", connection.Clnt.GetState())
 	return connection
 }
 
 func gconnect(b *testing.B, dedupe bool, volumeid int64) *api.SdfsConnection {
 
 	//api.DisableTrust = true
-	api.Debug = true
+	api.Debug = false
 	api.UserName = "admin"
 	api.Password = "admin"
 	api.Mtls = false
