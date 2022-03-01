@@ -3,8 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
@@ -17,7 +18,7 @@ type FileIOProxy struct {
 	dfc           int64
 	proxy         bool
 	dedupe        map[int64]*dedupe.DedupeEngine
-	dedupeEnabled map[int64]bool
+	dedupeEnabled map[int64]ForwardEntry
 	configLock    sync.RWMutex
 }
 
@@ -42,8 +43,8 @@ func (s *FileIOProxy) Fsync(ctx context.Context, req *spb.FsyncRequest) (*spb.Fs
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
-	if s.dedupeEnabled[volid] {
-		s.dedupe[volid].SyncFile(req.Path)
+	if s.dedupeEnabled[volid].Dedupe {
+		s.dedupe[volid].SyncFile(req.Path, volid)
 	}
 	if val, ok := s.fc[volid]; ok {
 		return val.Fsync(ctx, req)
@@ -100,7 +101,7 @@ func (s *FileIOProxy) Utime(ctx context.Context, req *spb.UtimeRequest) (*spb.Ut
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
-	if s.proxy || volid == 0 || volid == -1 {
+	if volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
 	if val, ok := s.fc[volid]; ok {
@@ -112,12 +113,12 @@ func (s *FileIOProxy) Utime(ctx context.Context, req *spb.UtimeRequest) (*spb.Ut
 
 func (s *FileIOProxy) Truncate(ctx context.Context, req *spb.TruncateRequest) (*spb.TruncateResponse, error) {
 	volid := req.PvolumeID
-	if s.proxy || volid == 0 || volid == -1 {
+	if volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.Path)
+			dval.SyncFile(req.Path, req.PvolumeID)
 		}
 
 		return val.Truncate(ctx, req)
@@ -147,8 +148,8 @@ func (s *FileIOProxy) GetAttr(ctx context.Context, req *spb.StatRequest) (*spb.S
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
-	if s.dedupeEnabled[volid] {
-		s.dedupe[volid].SyncFile(req.Path)
+	if s.dedupeEnabled[volid].Dedupe {
+		s.dedupe[volid].SyncFile(req.Path, volid)
 	}
 	if val, ok := s.fc[volid]; ok {
 		return val.GetAttr(ctx, req)
@@ -179,8 +180,8 @@ func (s *FileIOProxy) Flush(ctx context.Context, req *spb.FlushRequest) (*spb.Fl
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
-	if s.dedupeEnabled[volid] {
-		s.dedupe[volid].Sync(req.Fd)
+	if s.dedupeEnabled[volid].Dedupe {
+		s.dedupe[volid].Sync(req.Fd, volid)
 	}
 	if val, ok := s.fc[volid]; ok {
 		return val.Flush(ctx, req)
@@ -253,14 +254,40 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
+
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len)
-			if err != nil {
-				return nil, err
+			if req.Compressed {
+				out, err := dedupe.DecompressData(req.Data, req.Len)
+				if err != nil {
+					log.Error(err)
+					return nil, err
+				}
+				err = dval.Write(req.FileHandle, req.Start, out, req.Len, req.PvolumeID)
+				if err != nil {
+					log.Errorf("error writing %v", err)
+					return nil, err
+				} else {
+					return &spb.DataWriteResponse{}, nil
+				}
 			} else {
-				return &spb.DataWriteResponse{}, nil
+				err := dval.Write(req.FileHandle, req.Start, req.Data, req.Len, req.PvolumeID)
+				if err != nil {
+					log.Errorf("error writing %v", err)
+					return nil, err
+				} else {
+					return &spb.DataWriteResponse{}, nil
+				}
 			}
+		}
+		if len(req.Data) > 10 && !req.Compressed && s.dedupeEnabled[volid].CompressData {
+			buf, err := dedupe.CompressData(req.Data)
+			if err != nil {
+				log.Error(err)
+				return nil, err
+			}
+			req.Data = buf
+			req.Compressed = true
 		}
 		return val.Write(ctx, req)
 	} else {
@@ -276,7 +303,7 @@ func (s *FileIOProxy) Read(ctx context.Context, req *spb.DataReadRequest) (*spb.
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.Sync(req.FileHandle)
+			dval.Sync(req.FileHandle, req.PvolumeID)
 		}
 		return val.Read(ctx, req)
 	} else {
@@ -293,7 +320,7 @@ func (s *FileIOProxy) Release(ctx context.Context, req *spb.FileCloseRequest) (*
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.Close(req.FileHandle)
+			dval.Close(req.FileHandle, req.PvolumeID)
 		}
 		return val.Release(ctx, req)
 	} else {
@@ -309,8 +336,13 @@ func (s *FileIOProxy) Mknod(ctx context.Context, req *spb.MkNodRequest) (*spb.Mk
 		volid = s.dfc
 	}
 	if val, ok := s.fc[volid]; ok {
-		return val.Mknod(ctx, req)
+		mknodr, err := val.Mknod(ctx, req)
+		if err != nil {
+			log.Errorf("unable to mkdnod %d, %v", volid, err)
+		}
+		return mknodr, err
 	} else {
+		log.Errorf("unable to find volume %d", volid)
 		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
 
@@ -330,7 +362,11 @@ func (s *FileIOProxy) Open(ctx context.Context, req *spb.FileOpenRequest) (*spb.
 			return rsp, err
 		}
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.Open(req.Path, rsp.FileHandle)
+			err = dval.Open(req.Path, rsp.FileHandle, req.PvolumeID)
+			if err != nil {
+				log.Errorf("unable to open %v", err)
+				return nil, err
+			}
 		}
 		return rsp, nil
 	} else {
@@ -347,7 +383,7 @@ func (s *FileIOProxy) GetFileInfo(ctx context.Context, req *spb.FileInfoRequest)
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.FileName)
+			dval.SyncFile(req.FileName, req.PvolumeID)
 		}
 		return val.GetFileInfo(ctx, req)
 	} else {
@@ -364,8 +400,8 @@ func (s *FileIOProxy) CreateCopy(ctx context.Context, req *spb.FileSnapshotReque
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.Src)
-			dval.SyncFile(req.Dest)
+			dval.SyncFile(req.Src, req.PvolumeID)
+			dval.SyncFile(req.Dest, req.PvolumeID)
 		}
 		return val.CreateCopy(ctx, req)
 	} else {
@@ -410,7 +446,7 @@ func (s *FileIOProxy) Stat(ctx context.Context, req *spb.FileInfoRequest) (*spb.
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.FileName)
+			dval.SyncFile(req.FileName, volid)
 		}
 		return val.Stat(ctx, req)
 	} else {
@@ -427,8 +463,8 @@ func (s *FileIOProxy) Rename(ctx context.Context, req *spb.FileRenameRequest) (*
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.CloseFile(req.Src)
-			dval.CloseFile(req.Dest)
+			dval.CloseFile(req.Src, req.PvolumeID)
+			dval.CloseFile(req.Dest, req.PvolumeID)
 		}
 		return val.Rename(ctx, req)
 	} else {
@@ -445,8 +481,8 @@ func (s *FileIOProxy) CopyExtent(ctx context.Context, req *spb.CopyExtentRequest
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.SrcFile)
-			dval.SyncFile(req.DstFile)
+			dval.SyncFile(req.SrcFile, req.PvolumeID)
+			dval.SyncFile(req.DstFile, req.PvolumeID)
 		}
 		return val.CopyExtent(ctx, req)
 	} else {
@@ -511,7 +547,7 @@ func (s *FileIOProxy) StatFS(ctx context.Context, req *spb.StatFSRequest) (*spb.
 
 }
 
-func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, debug bool) error {
+func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]ForwardEntry, debug bool) error {
 	s.configLock.Lock()
 	defer s.configLock.Unlock()
 	fcm := make(map[int64]spb.FileIOServiceClient)
@@ -520,43 +556,101 @@ func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 	for indx, clnt := range clnts {
 		vc := spb.NewFileIOServiceClient(clnt)
 		fcm[indx] = vc
-		if dedupeEnabled[indx] {
+		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, indx)
+			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
 			if err != nil {
 				log.Printf("error initializing dedupe connection: %v\n", err)
 				return err
 			}
 			dd[indx] = de
-			defaultVolume = indx
+
 		}
+		defaultVolume = indx
 	}
+	s.dedupeEnabled = dedupeEnabled
 	s.dfc = defaultVolume
 	s.dedupe = dd
 	s.fc = fcm
 	return nil
 }
 
-func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, proxy, debug bool) (*FileIOProxy, error) {
+func (s *FileIOProxy) SetRetrievalTier(ctx context.Context, req *spb.SetRetrievalTierRequest) (*spb.SetRetrievalTierResponse, error) {
+
+	volid := req.PvolumeID
+
+	s.configLock.RLock()
+
+	defer s.configLock.RUnlock()
+
+	if s.proxy || volid == 0 || volid == -1 {
+
+		volid = s.dfc
+
+	}
+
+	if val, ok := s.fc[volid]; ok {
+
+		return val.SetRetrievalTier(ctx, req)
+
+	} else {
+
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+
+	}
+
+}
+
+func (s *FileIOProxy) GetRetrievalTier(ctx context.Context, req *spb.GetRetrievalTierRequest) (*spb.GetRetrievalTierResponse, error) {
+
+	volid := req.PvolumeID
+
+	s.configLock.RLock()
+
+	defer s.configLock.RUnlock()
+
+	if s.proxy || volid == 0 || volid == -1 {
+
+		volid = s.dfc
+
+	}
+
+	if val, ok := s.fc[volid]; ok {
+
+		return val.GetRetrievalTier(ctx, req)
+
+	} else {
+
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+
+	}
+
+}
+
+func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]ForwardEntry, proxy, debug bool) (*FileIOProxy, error) {
 	fcm := make(map[int64]spb.FileIOServiceClient)
 	dd := make(map[int64]*dedupe.DedupeEngine)
+	if debug {
+		log.SetLevel(log.DebugLevel)
+	}
 	var defaultVolume int64
 	for indx, clnt := range clnts {
 		vc := spb.NewFileIOServiceClient(clnt)
 		fcm[indx] = vc
-		if dedupeEnabled[indx] {
+		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, indx)
+			de, err := dedupe.NewDedupeEngine(ctx, clnt, dedupeEnabled[indx].DedupeBuffer, dedupeEnabled[indx].DedupeThreads, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
 			if err != nil {
-				log.Printf("error initializing dedupe connection: %v\n", err)
+				log.Errorf("error initializing dedupe connection: %v\n", err)
 				return nil, err
 			}
 			dd[indx] = de
-			defaultVolume = indx
 		}
+		defaultVolume = indx
 	}
+	log.Infof("Default Volume %d", defaultVolume)
 	sc := &FileIOProxy{fc: fcm, dedupeEnabled: dedupeEnabled, dedupe: dd, dfc: defaultVolume, proxy: proxy}
 	return sc, nil
 

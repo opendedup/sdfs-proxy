@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"encoding/json"
 	"runtime"
 	"sync"
 
@@ -31,8 +32,8 @@ var volumeIds []int64
 
 var tls = false
 var mtls = false
-var lport = "localhost:16442"
-var imagename = "gcr.io/hybrics/hybrics:master"
+var lport = "localhost:16442-16445"
+var imagename = "gcr.io/hybrics/hybrics:dp2"
 var password = "admin"
 
 const (
@@ -416,6 +417,24 @@ func TestSync(t *testing.T) {
 	}
 }
 
+func uploadTest(ctx context.Context, t *testing.T, vid int64) {
+	fn, _ := makeFile(t, "", 1024, false, vid)
+	connection := connect(t, false, vid)
+	assert.NotNil(t, connection)
+	defer connection.CloseConnection(ctx)
+	fh, err := connection.Open(ctx, fn, int32(-1))
+	assert.Nil(t, err)
+	b := randBytesMaskImpr(16)
+	err = connection.Write(ctx, fh, b, 0, int32(len(b)))
+	assert.Nil(t, err)
+	err = connection.Flush(ctx, fn, fh)
+	assert.Nil(t, err)
+	err = connection.Release(ctx, fh)
+	assert.Nil(t, err)
+	err = connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+}
+
 func TestMaxAge(t *testing.T) {
 	for _, vid := range volumeIds {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -442,10 +461,10 @@ func TestMaxAge(t *testing.T) {
 		tn := fmt.Sprintf("/tmp/%s", nfn)
 		time.Sleep(10 * time.Second)
 
-		_, err = connection.Download(ctx, _nfn, tn)
+		_, err = connection.Download(ctx, _nfn, tn, 1024)
 		defer os.Remove(nfn)
 		assert.Nil(t, err)
-		_, err = connection.Upload(ctx, tn, nfn)
+		_, err = connection.Upload(ctx, tn, nfn, 1024)
 		assert.Nil(t, err)
 		os.Remove(tn)
 		info, err = connection.DSEInfo(ctx)
@@ -494,10 +513,10 @@ func TestMaxAge(t *testing.T) {
 		nfn = string(randBytesMaskImpr(16))
 		tn = fmt.Sprintf("/tmp/%s", nfn)
 		time.Sleep(10 * time.Second)
-		_, err = connection.Download(ctx, _nfn, tn)
+		_, err = connection.Download(ctx, _nfn, tn, 1024)
 		assert.Nil(t, err)
 		for i := 0; i < 10; i++ {
-			_, err = connection.Upload(ctx, tn, fmt.Sprintf("file%d", i))
+			_, err = connection.Upload(ctx, tn, fmt.Sprintf("file%d", i), 1024)
 			if err != nil {
 				t.Logf("upload error %v", err)
 			}
@@ -747,7 +766,7 @@ func TestUpload(t *testing.T) {
 		defer connection.CloseConnection(ctx)
 		fn := string(randBytesMaskImpr(16))
 		tn := fmt.Sprintf("/tmp/%s", fn)
-		data := randBytesMaskImpr(1024)
+		data := randBytesMaskImpr(1024 * 1024 * 16)
 		h, err := blake2b.New(32, make([]byte, 0))
 
 		assert.Nil(t, err)
@@ -755,7 +774,7 @@ func TestUpload(t *testing.T) {
 		assert.Nil(t, err)
 		h.Write(data)
 		bs := h.Sum(nil)
-		wr, err := connection.Upload(ctx, tn, fn)
+		wr, err := connection.Upload(ctx, tn, fn, 1024*1024)
 		assert.Nil(t, err)
 		assert.Equal(t, int64(len(data)), wr)
 		nhs := readFile(t, fn, false, vid)
@@ -763,7 +782,7 @@ func TestUpload(t *testing.T) {
 
 		nfn := string(randBytesMaskImpr(16))
 		ntn := fmt.Sprintf("/tmp/%s", nfn)
-		rr, err := connection.Download(ctx, fn, ntn)
+		rr, err := connection.Download(ctx, fn, ntn, 1024)
 		assert.Equal(t, int64(len(data)), rr)
 		assert.Nil(t, err)
 		ndata, err := ioutil.ReadFile(ntn)
@@ -997,32 +1016,86 @@ func Benchmark512DirectWrite(b *testing.B) {
 }
 
 func TestProxyVolumeInfo(t *testing.T) {
-	for _, vid := range volumeIds {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		connection := connect(t, false, vid)
-		vis, err := connection.GetProxyVolumes(ctx)
-		assert.Nil(t, err)
-		var vids []int64
-		for _, vi := range vis.VolumeInfoResponse {
-			vids = append(vids, vi.SerialNumber)
-			t.Logf("serial = %d", vi.SerialNumber)
-		}
-		assert.ElementsMatch(t, vids, volumeIds)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t, false, -1)
+	vis, err := connection.GetProxyVolumes(ctx)
+	if err != nil {
+		t.Logf("error %v", err)
 	}
+	assert.Nil(t, err)
+	var vids []int64
+	for _, vi := range vis.VolumeInfoResponse {
+		vids = append(vids, vi.SerialNumber)
+		t.Logf("serial = %d", vi.SerialNumber)
+	}
+	assert.ElementsMatch(t, vids, volumeIds)
+}
+
+func TestReloadProxyVolume(t *testing.T) {
+	portR := &paip.PortRedirectors{}
+	for i := 2; i < 4; i++ {
+		fe := paip.ForwardEntry{Address: fmt.Sprintf("sdfs://localhost:644%d", i)}
+		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
+	}
+	b, err := json.Marshal(*portR)
+	assert.Nil(t, err)
+	err = ioutil.WriteFile("testpf.json", b, 0644)
+	assert.Nil(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	connection := connect(t, false, -1)
+	defer connection.CloseConnection(ctx)
+	_, err = connection.ReloadProxyConfig(ctx)
+	assert.Nil(t, err)
+	vis, err := connection.GetProxyVolumes(ctx)
+	if err != nil {
+		t.Logf("error %v", err)
+	}
+	assert.Nil(t, err)
+	for _, vi := range vis.VolumeInfoResponse {
+		//t.Logf("serial = %d", vi.SerialNumber)
+		uploadTest(ctx, t, vi.SerialNumber)
+	}
+	assert.Equal(t, 2, len(vis.VolumeInfoResponse))
+	portR = &paip.PortRedirectors{}
+	for i := 2; i < 5; i++ {
+		fe := paip.ForwardEntry{Address: fmt.Sprintf("sdfs://localhost:644%d", i)}
+		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
+	}
+	b, err = json.Marshal(*portR)
+	assert.Nil(t, err)
+	err = ioutil.WriteFile("testpf.json", b, 0644)
+	assert.Nil(t, err)
+	_, err = connection.ReloadProxyConfig(ctx)
+	assert.Nil(t, err)
+	vis, err = connection.GetProxyVolumes(ctx)
+	if err != nil {
+		t.Logf("error %v", err)
+	}
+	assert.Nil(t, err)
+	var vids []int64
+	for _, vi := range vis.VolumeInfoResponse {
+		vids = append(vids, vi.SerialNumber)
+		//t.Logf("serial = %d", vi.SerialNumber)
+		uploadTest(ctx, t, vi.SerialNumber)
+	}
+	assert.ElementsMatch(t, vids, volumeIds)
+
 }
 
 func TestMain(m *testing.M) {
 
 	rand.Seed(time.Now().UTC().UnixNano())
 	var cli *client.Client
-	var containernames []string
 	var err error
 	var port = 2
 	cmp := make(map[int64]*grpc.ClientConn)
-	dd := make(map[int64]bool)
+	dd := make(map[int64]paip.ForwardEntry)
+	var containernames []string
+
 	if runtime.GOOS != "windows" {
-		for port < 5 {
+		for port < 4 {
 			cli, err = client.NewClientWithOpts(client.FromEnv)
 			if err != nil {
 				fmt.Printf("Unable to create docker client %v", err)
@@ -1032,33 +1105,52 @@ func TestMain(m *testing.M) {
 			cli.NegotiateAPIVersion(ctx)
 			portopening := fmt.Sprintf("644%d", port)
 			containername := fmt.Sprintf("portredirsdfs-%s", portopening)
-			containernames = append(containernames, containername)
 
 			inputEnv := []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
-			if port != 3 {
-				inputEnv = append(inputEnv, "DISABLE_TLS=true")
-			}
+
+			inputEnv = append(inputEnv, "DISABLE_TLS=true")
 			cmd := []string{}
 			_, err = runContainer(cli, imagename, containername, portopening, "6442", inputEnv, cmd)
 			if err != nil {
 				fmt.Printf("Unable to create docker client %v", err)
 			}
-			if port != 3 {
-				maddress = append(maddress, fmt.Sprintf("sdfs://localhost:644%d", port))
-			} else {
-				maddress = append(maddress, fmt.Sprintf("sdfss://localhost:644%d", port))
-			}
+			maddress = append(maddress, fmt.Sprintf("sdfs://localhost:644%d", port))
+			containernames = append(containernames, containername)
 			port++
 		}
+		cli, err = client.NewClientWithOpts(client.FromEnv)
+		if err != nil {
+			fmt.Printf("Unable to create docker client %v", err)
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		cli.NegotiateAPIVersion(ctx)
+		portopening := fmt.Sprintf("644%d", port)
+		containername := fmt.Sprintf("portredirsdfs-%s", portopening)
+
+		inputEnv := []string{"TYPE=azure", fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("BUCKET_NAME=%s", os.Getenv("AZURE_BUCKET_NAME")), fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("SECRET_KEY=%s", os.Getenv("AZURE_SECRET_KEY")), fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 "}
+
+		inputEnv = append(inputEnv, "DISABLE_TLS=true")
+		cmd := []string{}
+		_, err = runContainer(cli, imagename, containername, portopening, "6442", inputEnv, cmd)
+		if err != nil {
+			fmt.Printf("Unable to create docker client %v", err)
+		}
+		maddress = append(maddress, fmt.Sprintf("sdfs://localhost:644%d", port))
+		containernames = append(containernames, containername)
+
 	}
 	api.DisableTrust = true
+	portR := &paip.PortRedirectors{}
 	for _, addr := range maddress {
-		connection, err := api.NewConnection(addr, false, -1)
+		fe := paip.ForwardEntry{Address: addr}
+		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
+		connection, err := api.NewConnection(addr, false, true, -1, 0, 0)
 		retrys := 0
 		for err != nil {
 			log.Printf("retries = %d", retrys)
 			time.Sleep(20 * time.Second)
-			connection, err = api.NewConnection(addr, false, -1)
+			connection, err = api.NewConnection(addr, false, true, -1, 0, 0)
 			if retrys > 10 {
 				fmt.Printf("SDFS Server connection timed out %s\n", addr)
 				os.Exit(-1)
@@ -1072,31 +1164,105 @@ func TestMain(m *testing.M) {
 		log.Printf("connected to volume = %d", connection.Volumeid)
 		volumeIds = append(volumeIds, connection.Volumeid)
 		cmp[connection.Volumeid] = connection.Clnt
-		dd[connection.Volumeid] = false
+		dd[connection.Volumeid] = paip.ForwardEntry{
+			Address:       addr,
+			Dedupe:        false,
+			DedupeThreads: 1,
+			DedupeBuffer:  4,
+		}
 	}
 	paip.NOSHUTDOWN = true
-	pf := paip.NewPortRedirector("")
+	b, err := json.Marshal(*portR)
+	if err != nil {
+		fmt.Printf("Unable to serialize portredirectors %v", err)
+	}
+	err = ioutil.WriteFile("testpf.json", b, 0644)
+	defer os.Remove("testpf.json")
+	if err != nil {
+		fmt.Printf("Unable to write portredirectors to file %v", err)
+	}
+	pf := paip.NewPortRedirector("testpf.json", lport, false, nil, false)
 	pf.Cmp = cmp
 	pf.Dd = dd
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf)
+	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 	code := m.Run()
 	fmt.Printf("Non TLS Testing code is %d\n", code)
 	paip.StopServer()
+	cmp = make(map[int64]*grpc.ClientConn)
+	dd = make(map[int64]paip.ForwardEntry)
+	for _, addr := range maddress {
+		fe := paip.ForwardEntry{Address: addr}
+		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
+		connection, err := api.NewConnection(addr, false, true, -1, 0, 0)
+		retrys := 0
+		for err != nil {
+			log.Printf("retries = %d", retrys)
+			time.Sleep(20 * time.Second)
+			connection, err = api.NewConnection(addr, false, true, -1, 0, 0)
+			if retrys > 10 {
+				fmt.Printf("SDFS Server connection timed out %s\n", addr)
+				os.Exit(-1)
+			} else {
+				retrys++
+			}
+		}
+		if err != nil {
+			fmt.Printf("Unable to create connection %v", err)
+		}
+		log.Printf("connected to volume = %d", connection.Volumeid)
+		cmp[connection.Volumeid] = connection.Clnt
+		dd[connection.Volumeid] = paip.ForwardEntry{
+			Address:       addr,
+			Dedupe:        false,
+			DedupeThreads: 1,
+			DedupeBuffer:  4,
+		}
+	}
 	tls = true
 	api.DisableTrust = true
 	paip.ServerCACert = "out/signer_key.crt"
 	paip.ServerCert = "out/tls_key.crt"
 	paip.ServerKey = "out/tls_key.key"
 	paip.ServerTls = true
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf)
+	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 	code = m.Run()
 	fmt.Printf("TLS Testing code is %d\n", code)
 	paip.StopServer()
+	cmp = make(map[int64]*grpc.ClientConn)
+	dd = make(map[int64]paip.ForwardEntry)
+	for _, addr := range maddress {
+		fe := paip.ForwardEntry{Address: addr}
+		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
+		connection, err := api.NewConnection(addr, false, true, -1, 0, 0)
+		retrys := 0
+		for err != nil {
+			log.Printf("retries = %d", retrys)
+			time.Sleep(20 * time.Second)
+			connection, err = api.NewConnection(addr, false, true, -1, 0, 0)
+			if retrys > 10 {
+				fmt.Printf("SDFS Server connection timed out %s\n", addr)
+				os.Exit(-1)
+			} else {
+				retrys++
+			}
+		}
+		if err != nil {
+			fmt.Printf("Unable to create connection %v", err)
+		}
+		log.Printf("connected to volume = %d", connection.Volumeid)
+		cmp[connection.Volumeid] = connection.Clnt
+		dd[connection.Volumeid] = paip.ForwardEntry{
+			Address:       addr,
+			Dedupe:        false,
+			DedupeThreads: 1,
+			DedupeBuffer:  4,
+		}
+	}
 	paip.ServerMtls = true
 	mtls = true
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf)
+	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 	code = m.Run()
 	fmt.Printf("MTLS Testing code is %d\n", code)
@@ -1104,7 +1270,7 @@ func TestMain(m *testing.M) {
 	paip.ServerMtls = true
 	paip.AnyCert = true
 	mtls = true
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf)
+	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 	code = m.Run()
 	fmt.Printf("AnyCert MTLS Testing code is %d\n", code)
@@ -1357,7 +1523,7 @@ func deleteFile(t *testing.T, fn string, volumeId int64) {
 func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 
 	//api.DisableTrust = true
-	api.Debug = true
+	api.Debug = false
 	api.UserName = "admin"
 	api.Password = "admin"
 	api.Mtls = false
@@ -1373,18 +1539,19 @@ func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 		api.MtlsKey = "out/client_key.key"
 	}
 
-	connection, err := api.NewConnection(address, dedupe, volumeid)
+	connection, err := api.NewConnection(address, dedupe, true, volumeid, 4000000, 60)
 	if err != nil {
 		t.Errorf("Unable to connect to %s error: %v\n", address, err)
 		return nil
 	}
+	t.Logf("Connection state %s", connection.Clnt.GetState())
 	return connection
 }
 
 func gconnect(b *testing.B, dedupe bool, volumeid int64) *api.SdfsConnection {
 
 	//api.DisableTrust = true
-	api.Debug = true
+	api.Debug = false
 	api.UserName = "admin"
 	api.Password = "admin"
 	api.Mtls = false
@@ -1400,12 +1567,12 @@ func gconnect(b *testing.B, dedupe bool, volumeid int64) *api.SdfsConnection {
 		api.MtlsKey = "out/client_key.key"
 	}
 
-	connection, err := api.NewConnection(address, false, -1)
+	connection, err := api.NewConnection(address, false, true, -1, 0, 0)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(address, false, -1)
+		connection, err = api.NewConnection(address, false, true, -1, 0, 0)
 		if retrys > 10 {
 			fmt.Printf("SDFS Server connection timed out %s\n", address)
 			os.Exit(-1)
@@ -1419,12 +1586,12 @@ func gconnect(b *testing.B, dedupe bool, volumeid int64) *api.SdfsConnection {
 func dconnect(b *testing.B) *api.SdfsConnection {
 	var address = "sdfss://localhost:6443"
 
-	connection, err := api.NewConnection(address, false, -1)
+	connection, err := api.NewConnection(address, false, true, -1, 0, 0)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(address, false, -1)
+		connection, err = api.NewConnection(address, false, true, -1, 0, 0)
 		if retrys > 10 {
 			fmt.Printf("SDFS Server connection timed out %s\n", address)
 			os.Exit(-1)

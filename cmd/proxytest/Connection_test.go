@@ -28,7 +28,7 @@ import (
 var maddress = "sdfss://localhost:6442"
 var address = "sdfs://localhost:16442"
 var port = "localhost:16442"
-var imagename = "gcr.io/hybrics/hybrics:master"
+var imagename = "gcr.io/hybrics/hybrics:dp2"
 var password = "admin"
 
 const (
@@ -406,10 +406,10 @@ func TestMaxAge(t *testing.T) {
 	nfn := string(randBytesMaskImpr(16))
 	time.Sleep(10 * time.Second)
 
-	_, err = connection.Download(ctx, _nfn, nfn)
+	_, err = connection.Download(ctx, _nfn, nfn, 1024)
 	defer os.Remove(nfn)
 	assert.Nil(t, err)
-	_, err = connection.Upload(ctx, nfn, nfn)
+	_, err = connection.Upload(ctx, nfn, nfn, 1024)
 	assert.Nil(t, err)
 	os.Remove(_nfn)
 	info, err = connection.DSEInfo(ctx)
@@ -457,10 +457,10 @@ func TestMaxAge(t *testing.T) {
 	_nfn, _ = makeFile(t, "", fsz, false)
 	nfn = string(randBytesMaskImpr(16))
 	time.Sleep(10 * time.Second)
-	_, err = connection.Download(ctx, _nfn, nfn)
+	_, err = connection.Download(ctx, _nfn, nfn, 1024)
 	assert.Nil(t, err)
 	for i := 0; i < 10; i++ {
-		_, err = connection.Upload(ctx, nfn, fmt.Sprintf("file%d", i))
+		_, err = connection.Upload(ctx, nfn, fmt.Sprintf("file%d", i), 1024)
 		if err != nil {
 			t.Logf("upload error %v", err)
 		}
@@ -698,13 +698,13 @@ func TestUpload(t *testing.T) {
 	assert.Nil(t, err)
 	h.Write(data)
 	bs := h.Sum(nil)
-	wr, err := connection.Upload(ctx, fn, fn)
+	wr, err := connection.Upload(ctx, fn, fn, 1024)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(len(data)), wr)
 	nhs := readFile(t, fn, false)
 	assert.Equal(t, bs, nhs)
 	nfn := string(randBytesMaskImpr(16))
-	rr, err := connection.Download(ctx, fn, nfn)
+	rr, err := connection.Download(ctx, fn, nfn, 1024)
 	assert.Equal(t, int64(len(data)), rr)
 	assert.Nil(t, err)
 	ndata, err := ioutil.ReadFile(nfn)
@@ -743,12 +743,12 @@ func TestMain(m *testing.M) {
 		}
 	}
 	api.DisableTrust = true
-	connection, err := api.NewConnection(maddress, false, -1)
+	connection, err := api.NewConnection(maddress, false, true, -1, 0, 0)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(maddress, false, -1)
+		connection, err = api.NewConnection(maddress, false, true, -1, 0, 0)
 		if retrys > 10 {
 			break
 		} else {
@@ -758,15 +758,21 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Printf("Unable to create connection %v", err)
 	}
-
-	log.Printf("connected to volume = %d", connection.Volumeid)
+	if connection != nil {
+		log.Printf("connected to volume = %d", connection.Volumeid)
+	}
 	paip.NOSHUTDOWN = true
 	if connection != nil {
 		cmp := make(map[int64]*grpc.ClientConn)
 		cmp[connection.Volumeid] = connection.Clnt
-		dd := make(map[int64]bool)
-		dd[connection.Volumeid] = true
-		go paip.StartServer(cmp, port, true, dd, true, false, password)
+		dd := make(map[int64]paip.ForwardEntry)
+		dd[connection.Volumeid] = paip.ForwardEntry{
+			Address:       maddress,
+			Dedupe:        true,
+			DedupeThreads: 1,
+			DedupeBuffer:  4,
+		}
+		go paip.StartServer(cmp, port, true, dd, true, false, password, nil, false)
 	}
 	fmt.Printf("Server initialized at %s\n", port)
 	code := m.Run()
@@ -1021,7 +1027,7 @@ func connect(t *testing.T, dedupe bool) *api.SdfsConnection {
 	api.UserName = "admin"
 	api.Password = "admin"
 
-	connection, err := api.NewConnection(address, dedupe, -1)
+	connection, err := api.NewConnection(address, dedupe, true, -1, 400000, 60)
 	if err != nil {
 		t.Errorf("Unable to connect to %s error: %v\n", address, err)
 		return nil

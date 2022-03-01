@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
@@ -75,7 +76,7 @@ func (s *SDFSEventProxy) SubscribeEvent(req *spb.SDFSEventRequest, stream spb.SD
 	}
 }
 
-func (s *SDFSEventProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, debug bool) error {
+func (s *SDFSEventProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, debug bool) error {
 	s.configLock.Lock()
 	defer s.configLock.Unlock()
 	vcm := make(map[int64]spb.SDFSEventServiceClient)
@@ -90,7 +91,10 @@ func (s *SDFSEventProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedup
 	return nil
 }
 
-func NewEventProxy(clnts map[int64]*grpc.ClientConn, proxy bool) *SDFSEventProxy {
+func NewEventProxy(clnts map[int64]*grpc.ClientConn, proxy, debug bool) *SDFSEventProxy {
+	if debug {
+		log.SetLevel(log.DebugLevel)
+	}
 	vcm := make(map[int64]spb.SDFSEventServiceClient)
 	var defaultVolume int64
 	for indx, clnt := range clnts {

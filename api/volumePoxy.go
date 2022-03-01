@@ -257,23 +257,6 @@ func (s *VolumeProxy) SyncCloudVolume(ctx context.Context, req *spb.SyncVolReque
 
 }
 
-func (s *VolumeProxy) GetProxyVolumes(ctx context.Context, req *spb.ProxyVolumeInfoRequest) (*spb.ProxyVolumeInfoResponse, error) {
-
-	var vis []*spb.VolumeInfoResponse
-	for id, con := range s.vc {
-
-		vi, err := con.GetVolumeInfo(ctx, &spb.VolumeInfoRequest{})
-		if err != nil {
-			log.Errorf("Error connecting to volume %d error:%v", id, err)
-		} else if id != vi.SerialNumber {
-			log.Warnf("Returned Volume Serial Number %d does not match locally recored %d\n", vi.SerialNumber, id)
-		} else {
-			vis = append(vis, vi)
-		}
-	}
-	return &spb.ProxyVolumeInfoResponse{VolumeInfoResponse: vis}, nil
-}
-
 func (s *VolumeProxy) shutdown() {
 	timer := time.NewTimer(10 * time.Second)
 	log.Warn("Shutting down volume")
@@ -284,7 +267,7 @@ func (s *VolumeProxy) shutdown() {
 
 }
 
-func (s *VolumeProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]bool, debug bool) error {
+func (s *VolumeProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, debug bool) error {
 	s.configLock.Lock()
 	defer s.configLock.Unlock()
 	vcm := make(map[int64]spb.VolumeServiceClient)
@@ -299,7 +282,10 @@ func (s *VolumeProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 	return nil
 }
 
-func NewVolumeProxy(clnts map[int64]*grpc.ClientConn, password string, proxy bool) *VolumeProxy {
+func NewVolumeProxy(clnts map[int64]*grpc.ClientConn, password string, proxy, debug bool) *VolumeProxy {
+	if debug {
+		log.SetLevel(log.DebugLevel)
+	}
 	vcm := make(map[int64]spb.VolumeServiceClient)
 	var defaultVolume int64
 	for indx, clnt := range clnts {

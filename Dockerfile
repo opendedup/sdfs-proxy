@@ -1,4 +1,4 @@
-FROM golang:1.13-alpine
+FROM golang:alpine3.15
 
 LABEL maintainer="Sam Silverberg  <sam.silverberg@gmail.com>"
 
