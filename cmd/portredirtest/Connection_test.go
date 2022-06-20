@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"encoding/json"
+	"hash"
 	"runtime"
 	"sync"
 
@@ -1408,28 +1409,31 @@ func makeGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConn
 	assert.Nil(t, err)
 	stat, err := connection.GetAttr(ctx, fn)
 	assert.Nil(t, err)
-	assert.Equal(t, stat.Mode, int32(511))
-	fh, err := connection.Open(ctx, fn, 0)
-	assert.Nil(t, err)
-	maxoffset := size
-	offset := int64(0)
-	h, err := blake2b.New(32, make([]byte, 0))
-	assert.Nil(t, err)
-	blockSz := 1024 * 32
-	for offset < maxoffset {
-		if blockSz > int(maxoffset-offset) {
-			blockSz = int(maxoffset - offset)
-		}
-		b := randBytesMaskImpr(blockSz)
-		err = connection.Write(ctx, fh, b, offset, int32(len(b)))
-		h.Write(b)
+	var h hash.Hash
+	if err != nil {
+		assert.Equal(t, stat.Mode, int32(511))
+		fh, err := connection.Open(ctx, fn, 0)
 		assert.Nil(t, err)
-		offset += int64(len(b))
-		b = nil
+		maxoffset := size
+		offset := int64(0)
+		h, err = blake2b.New(32, make([]byte, 0))
+		assert.Nil(t, err)
+		blockSz := 1024 * 32
+		for offset < maxoffset {
+			if blockSz > int(maxoffset-offset) {
+				blockSz = int(maxoffset - offset)
+			}
+			b := randBytesMaskImpr(blockSz)
+			err = connection.Write(ctx, fh, b, offset, int32(len(b)))
+			h.Write(b)
+			assert.Nil(t, err)
+			offset += int64(len(b))
+			b = nil
+		}
+		stat, _ = connection.GetAttr(ctx, fn)
+		assert.Equal(t, stat.Size, maxoffset)
+		_ = connection.Release(ctx, fh)
 	}
-	stat, _ = connection.GetAttr(ctx, fn)
-	assert.Equal(t, stat.Size, maxoffset)
-	_ = connection.Release(ctx, fh)
 	return fn, h.Sum(nil)
 }
 
