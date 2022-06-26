@@ -3,6 +3,7 @@ module github.com/opendedup/sdfs-proxy
 go 1.16
 
 require (
+	github.com/Azure/azure-storage-blob-go v0.15.0
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/docker/docker v20.10.12+incompatible
 	github.com/docker/go-connections v0.4.0
