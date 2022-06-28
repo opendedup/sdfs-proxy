@@ -1,10 +1,8 @@
 package test
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"hash"
 	"net/url"
 	"runtime"
@@ -20,11 +18,6 @@ import (
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	network "github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
-	natting "github.com/docker/go-connections/nat"
 	api "github.com/opendedup/sdfs-client-go/api"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	paip "github.com/opendedup/sdfs-proxy/api"
@@ -44,6 +37,7 @@ type testRun struct {
 	containerPort    string
 	cloudVol         bool
 	fe               *paip.ForwardEntry
+	direct           bool
 }
 
 var maddress []*testRun
@@ -51,7 +45,7 @@ var maddress []*testRun
 var tls = false
 var mtls = false
 var lport = "localhost:16442-16445"
-var imagename = "gcr.io/hybrics/hybrics:dp2"
+var imagename = "gcr.io/hybrics/hybrics:dp3"
 var password = "admin"
 
 const (
@@ -86,88 +80,88 @@ func runMatix(t *testing.T, testType string) {
 	defer cancel()
 
 	for _, c := range maddress {
-		testType := "PROXY"
-		t.Run(fmt.Sprintf("%s-testConnection-%s", testType, c.name), func(t *testing.T) {
-			testNewProxyConnection(t, c)
+		testNewProxyConnection(t, c)
+		t.Run(fmt.Sprintf("%s/%s/testConnection", testType, c.name), func(t *testing.T) {
+			assert.NotNil(t, c.connection)
 		})
-		t.Run(fmt.Sprintf("%s-testChown-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testChown", testType, c.name), func(t *testing.T) {
 			testChow(t, c)
 
 		})
-		t.Run(fmt.Sprintf("%s-testMkDir-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testMkDir", testType, c.name), func(t *testing.T) {
 			testMkDir(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testListDir-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testListDir", testType, c.name), func(t *testing.T) {
 			testListDir(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testMkNod-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testMkNod", testType, c.name), func(t *testing.T) {
 			testMkNod(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testMkDirAll-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testMkDirAll", testType, c.name), func(t *testing.T) {
 			testMkDirAll(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testCleanStore-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testCleanStore", testType, c.name), func(t *testing.T) {
 			testCleanStore(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testStatFS-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testStatFS", testType, c.name), func(t *testing.T) {
 			testStatFS(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testRename-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testRename", testType, c.name), func(t *testing.T) {
 			testRename(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testCopyFile-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testCopyFile", testType, c.name), func(t *testing.T) {
 			testCopyFile(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testEvents-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testEvents", testType, c.name), func(t *testing.T) {
 			testEvents(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testXAttrs-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testXAttrs", testType, c.name), func(t *testing.T) {
 			testXAttrs(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testSetUtime-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testSetUtime", testType, c.name), func(t *testing.T) {
 			testSetUtime(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testTuncate-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testTuncate", testType, c.name), func(t *testing.T) {
 			testTuncate(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testWriteLargeBlock-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testWriteLargeBlock", testType, c.name), func(t *testing.T) {
 			testWriteLargeBlock(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testCopyExtent-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testCopyExtent", testType, c.name), func(t *testing.T) {
 			testCopyExtent(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testSymLink-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testSymLink", testType, c.name), func(t *testing.T) {
 			testSymLink(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testSync-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testSync", testType, c.name), func(t *testing.T) {
 			testSync(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testMaxAge-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testMaxAge", testType, c.name), func(t *testing.T) {
 			testMaxAge(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testInfo-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testInfo", testType, c.name), func(t *testing.T) {
 			testInfo(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testGCSchedule-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testGCSchedule", testType, c.name), func(t *testing.T) {
 			testGCSchedule(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testUpload-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testUpload", testType, c.name), func(t *testing.T) {
 			testUpload(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testShutdown-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testShutdown", testType, c.name), func(t *testing.T) {
 			testShutdown(t, c)
 		})
-		t.Run(fmt.Sprintf("%s-testSetVolumeSize-%s", testType, c.name), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s/testSetVolumeSize", testType, c.name), func(t *testing.T) {
 			testSetVolumeSize(t, c)
 		})
 		if c.cloudVol {
-			t.Run(fmt.Sprintf("%s-testSetRWSpeed-%s", testType, c.name), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s/%s/testSetRWSpeed", testType, c.name), func(t *testing.T) {
 				testSetRWSpeed(t, c)
 			})
-			t.Run(fmt.Sprintf("%s-testCache-%s", testType, c.name), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s/%s/testCache", testType, c.name), func(t *testing.T) {
 				testCache(t, c)
 			})
-			t.Run(fmt.Sprintf("%s-testCloudSync-%s", testType, c.name), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s/%s/testCloudSync", testType, c.name), func(t *testing.T) {
 				testCloudSync(t, c)
 			})
 		}
@@ -181,11 +175,15 @@ func TestMatrix(t *testing.T) {
 		c.clientsidededupe = true
 	}
 	runMatix(t, "PROXYDEDUPE")
-
+	for _, c := range maddress {
+		c.direct = true
+	}
+	runMatix(t, "DIRECTDEDUPE")
 }
 
 func testNewProxyConnection(t *testing.T, c *testRun) {
-	c.connection = connect(t, c.clientsidededupe, c.volume)
+	t.Logf("Creating connection for %d\n", c.volume)
+	c.connection = dconnect(t, c)
 	assert.NotNil(t, c.connection)
 
 }
@@ -284,7 +282,7 @@ func testListDir(t *testing.T, c *testRun) {
 }
 
 func testCleanStore(t *testing.T, c *testRun) {
-	cleanStore(t, c, 30)
+	cleanStore(t, c)
 
 }
 
@@ -318,12 +316,15 @@ func testCopyFile(t *testing.T, c *testRun) {
 	nfn := string(randBytesMaskImpr(16))
 	_, err := c.connection.CopyFile(ctx, fn, nfn, false)
 	assert.Nil(t, err)
-	nhash := readFile(ctx, t, c, nfn, false)
-	assert.Equal(t, hash, nhash)
-	err = c.connection.DeleteFile(ctx, nfn)
+	nhash, err := readFile(ctx, t, c, nfn, false)
 	assert.Nil(t, err)
-	err = c.connection.DeleteFile(ctx, fn)
-	assert.Nil(t, err)
+	if err != nil {
+		assert.Equal(t, hash, nhash)
+		err = c.connection.DeleteFile(ctx, nfn)
+		assert.Nil(t, err)
+		err = c.connection.DeleteFile(ctx, fn)
+		assert.Nil(t, err)
+	}
 }
 
 func testEvents(t *testing.T, c *testRun) {
@@ -338,16 +339,19 @@ func testEvents(t *testing.T, c *testRun) {
 		_, err = c.connection.WaitForEvent(ctx, evt.Uuid)
 		assert.Nil(t, err)
 	}
-	nhash := readFile(ctx, t, c, nfn, false)
-	assert.Equal(t, hash, nhash)
-	err = c.connection.DeleteFile(ctx, nfn)
+	nhash, err := readFile(ctx, t, c, nfn, false)
 	assert.Nil(t, err)
-	err = c.connection.DeleteFile(ctx, fn)
-	assert.Nil(t, err)
-	_, err = c.connection.GetEvent(ctx, evt.Uuid)
-	assert.Nil(t, err)
-	_, err = c.connection.ListEvents(ctx)
-	assert.Nil(t, err)
+	if err != nil {
+		assert.Equal(t, hash, nhash)
+		err = c.connection.DeleteFile(ctx, nfn)
+		assert.Nil(t, err)
+		err = c.connection.DeleteFile(ctx, fn)
+		assert.Nil(t, err)
+		_, err = c.connection.GetEvent(ctx, evt.Uuid)
+		assert.Nil(t, err)
+		_, err = c.connection.ListEvents(ctx)
+		assert.Nil(t, err)
+	}
 }
 
 func testXAttrs(t *testing.T, c *testRun) {
@@ -402,7 +406,7 @@ func testSetUtime(t *testing.T, c *testRun) {
 func testTuncate(t *testing.T, c *testRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	fn, _ := makeFile(ctx, t, c, "", 1024*1024*1024*10)
+	fn, _ := makeFile(ctx, t, c, "", 1024*1024*10)
 	err := c.connection.Truncate(ctx, fn, int64(0))
 	assert.Nil(t, err)
 	stat, err := c.connection.GetAttr(ctx, fn)
@@ -428,15 +432,17 @@ func testSymLink(t *testing.T, c *testRun) {
 		defer cancel()
 		fn, _ := makeFile(ctx, t, c, "", 1024)
 		sfn := string(randBytesMaskImpr(16))
-		err := c.connection.SymLink(ctx, fn, sfn)
+		_, fls, err := c.connection.ListDir(ctx, "/", "", false, int32(100))
+		assert.Nil(t, err)
+		err = c.connection.SymLink(ctx, fn, sfn)
 		assert.Nil(t, err)
 		_sfn, err := c.connection.ReadLink(ctx, sfn)
 		assert.Nil(t, err)
 		assert.Equal(t, fn, _sfn)
 		_, err = c.connection.GetAttr(ctx, sfn)
 		assert.Nil(t, err)
-		_, fls, err := c.connection.ListDir(ctx, "/", "", false, int32(100))
-		assert.Equal(t, len(fls), 2)
+		_, nfls, err := c.connection.ListDir(ctx, "/", "", false, int32(100))
+		assert.Equal(t, len(fls), len(nfls)-1)
 		assert.Nil(t, err)
 		err = c.connection.Unlink(ctx, sfn)
 		assert.Nil(t, err)
@@ -478,6 +484,7 @@ func testMaxAge(t *testing.T, c *testRun) {
 	t.Logf("new max age : %d", info.MaxAge)
 	fsz := int64(1024 * 1024)
 	_nfn, _ := makeFile(ctx, t, c, "", fsz)
+	time.Sleep(15 * time.Second)
 	info, err = c.connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 
@@ -491,6 +498,7 @@ func testMaxAge(t *testing.T, c *testRun) {
 	_, err = c.connection.Upload(ctx, nfn, nfn, 1024)
 	assert.Nil(t, err)
 	os.Remove(_nfn)
+	time.Sleep(15 * time.Second)
 	info, err = c.connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 	nsz := info.CurrentSize
@@ -500,9 +508,9 @@ func testMaxAge(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 	err = c.connection.DeleteFile(ctx, _nfn)
 	assert.Nil(t, err)
-	time.Sleep(10 * time.Second)
+	time.Sleep(15 * time.Second)
 	c.connection.CleanStore(ctx, true, true)
-	tm := time.Duration(30 * int(time.Second))
+	tm := time.Duration(60 * int(time.Second))
 	time.Sleep(tm)
 	info, err = c.connection.DSEInfo(ctx)
 	assert.Nil(t, err)
@@ -516,13 +524,14 @@ func testMaxAge(t *testing.T, c *testRun) {
 	c.connection.DeleteFile(ctx, _nfn)
 	time.Sleep(10 * time.Second)
 	c.connection.CleanStore(ctx, true, true)
-	tm = time.Duration(30 * int(time.Second))
+	tm = time.Duration(60 * int(time.Second))
 	time.Sleep(tm)
 	info, err = c.connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 	fnsz = info.CurrentSize
 	t.Logf("sz = %d, fnsz=%d", sz, fnsz)
-	nhs := readFile(ctx, t, c, nfn, true)
+	nhs, err := readFile(ctx, t, c, nfn, true)
+	assert.Nil(t, err)
 	assert.Equal(t, hs, nhs)
 	c.connection.DeleteFile(ctx, _nfn)
 	time.Sleep(10 * time.Second)
@@ -535,6 +544,7 @@ func testMaxAge(t *testing.T, c *testRun) {
 	t.Logf("sz = %d, fnsz=%d", sz, fnsz)
 	_nfn, _ = makeFile(ctx, t, c, "", fsz)
 	nfn = string(randBytesMaskImpr(16))
+	os.Remove(nfn)
 	time.Sleep(10 * time.Second)
 	_, err = c.connection.Download(ctx, _nfn, nfn, 1024)
 	assert.Nil(t, err)
@@ -548,6 +558,7 @@ func testMaxAge(t *testing.T, c *testRun) {
 		assert.Nil(t, err)
 		time.Sleep(10 * time.Second)
 	}
+	time.Sleep(15 * time.Second)
 	info, _ = c.connection.DSEInfo(ctx)
 	sz = info.CurrentSize
 	c.connection.DeleteFile(ctx, _nfn)
@@ -640,13 +651,21 @@ func testCache(t *testing.T, c *testRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, err := c.connection.SetCacheSize(ctx, tb, true)
+	_, err := c.connection.SetCacheSize(ctx, int64(1)*tb, true)
 	assert.NotNil(t, err)
-	_, err = c.connection.SetCacheSize(ctx, int64(20)*gb, true)
-	assert.Nil(t, err)
 	dse, err := c.connection.DSEInfo(ctx)
 	assert.Nil(t, err)
-	assert.Equal(t, int64(20)*gb, dse.MaxCacheSize)
+	assert.Equal(t, int64(10)*gb, dse.MaxCacheSize)
+	_, err = c.connection.SetCacheSize(ctx, int64(5)*gb, true)
+	assert.Nil(t, err)
+	dse, err = c.connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(5)*gb, dse.MaxCacheSize)
+	_, err = c.connection.SetCacheSize(ctx, int64(10)*gb, true)
+	assert.Nil(t, err)
+	dse, err = c.connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(10)*gb, dse.MaxCacheSize)
 }
 
 func testSetRWSpeed(t *testing.T, c *testRun) {
@@ -672,7 +691,7 @@ func testSetVolumeSize(t *testing.T, c *testRun) {
 	assert.Equal(t, int64(100)*tb, vol.Capactity)
 }
 
-func cleanStore(t *testing.T, c *testRun, dur int) {
+func cleanStore(t *testing.T, c *testRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var files []string
@@ -681,21 +700,22 @@ func cleanStore(t *testing.T, c *testRun, dur int) {
 		files = append(files, fn)
 	}
 	_nfn, nh := makeFile(ctx, t, c, "", 1024*1024)
+	time.Sleep(60 * time.Second)
 	info, err := c.connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 	sz := info.CurrentSize
 	for _, l := range files {
 		c.connection.DeleteFile(ctx, l)
 	}
-	time.Sleep(10 * time.Second)
+	time.Sleep(65 * time.Second)
 	c.connection.CleanStore(ctx, true, true)
-	tm := time.Duration(dur * int(time.Second))
-	time.Sleep(tm)
+	time.Sleep(65 * time.Second)
 	info, err = c.connection.DSEInfo(ctx)
 	assert.Nil(t, err)
 	nsz := info.CurrentSize
 	assert.Greater(t, sz, nsz)
-	nhn := readFile(ctx, t, c, _nfn, true)
+	nhn, err := readFile(ctx, t, c, _nfn, true)
+	assert.Nil(t, err)
 	assert.Equal(t, nh, nhn)
 	t.Logf("orig = %d new = %d", sz, nsz)
 }
@@ -743,7 +763,7 @@ func testUpload(t *testing.T, c *testRun) {
 	fn := string(randBytesMaskImpr(16))
 	data := randBytesMaskImpr(1024)
 	h, err := blake2b.New(32, make([]byte, 0))
-
+	defer os.Remove(fn)
 	assert.Nil(t, err)
 	err = ioutil.WriteFile(fn, data, 0777)
 	assert.Nil(t, err)
@@ -752,7 +772,8 @@ func testUpload(t *testing.T, c *testRun) {
 	wr, err := c.connection.Upload(ctx, fn, fn, 1024)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(len(data)), wr)
-	nhs := readFile(ctx, t, c, fn, false)
+	nhs, err := readFile(ctx, t, c, fn, false)
+	assert.Nil(t, err)
 	assert.Equal(t, bs, nhs)
 	nfn := string(randBytesMaskImpr(16))
 	rr, err := c.connection.Download(ctx, fn, nfn, 1024)
@@ -771,16 +792,13 @@ func testUpload(t *testing.T, c *testRun) {
 }
 
 func testCloudSync(t *testing.T, c *testRun) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	assert.Nil(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cli.NegotiateAPIVersion(ctx)
 	containername := fmt.Sprintf("second-%s", c.containerName)
 	portopening := "6442"
 	nport := fmt.Sprintf("2%s", c.containerPort)
 	cmd := []string{}
-	_, err = runContainer(cli, imagename, containername, nport, portopening, c.inputEnv, cmd)
+	_, err := RunContainer(ctx, imagename, containername, nport, portopening, c.inputEnv, cmd, true)
 	if err != nil {
 		fmt.Printf("Unable to create docker client %v", err)
 	}
@@ -801,28 +819,32 @@ func testCloudSync(t *testing.T, c *testRun) {
 	connection, err := api.NewConnection(durl, false, true, -1, 0, 0)
 	retrys := 0
 	for err != nil {
-		log.Printf("retries = %d", retrys)
+		t.Logf("retries = %d\n", retrys)
 		time.Sleep(20 * time.Second)
 		connection, err = api.NewConnection(durl, false, true, -1, 0, 0)
 		if retrys > 10 {
-			fmt.Printf("SDFS Server connection timed out %s\n", durl)
+			t.Errorf("SDFS Server connection timed out %s\n", durl)
 			os.Exit(-1)
 		} else {
 			retrys++
 		}
 	}
 	assert.Nil(t, err)
-	tr.connection = connection
+
 	tr.volume = connection.Volumeid
-	log.Printf("connected to volume = %d", connection.Volumeid)
+	t.Logf("connected to volume = %d\n", connection.Volumeid)
 	b, err := json.Marshal(*portR)
 	assert.Nil(t, err)
 	err = ioutil.WriteFile("testpf.json", b, 0644)
 	assert.Nil(t, err)
-	connection = connect(t, false, -1)
-	defer connection.CloseConnection(ctx)
-	_, err = connection.ReloadProxyConfig(ctx)
+
+	_, err = c.connection.ReloadProxyConfig(ctx)
 	assert.Nil(t, err)
+	connection = connect(t, false, connection.Volumeid)
+	assert.NotNil(t, connection)
+	tr.connection = connection
+	defer connection.CloseConnection(ctx)
+	defer StopAndRemoveContainer(ctx, containername)
 	vis, err := connection.GetProxyVolumes(ctx)
 	if err != nil {
 		t.Logf("error %v", err)
@@ -830,11 +852,11 @@ func testCloudSync(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 	assert.Equal(t, len(portR.ForwardEntrys), len(vis.VolumeInfoResponse))
 	tr.connection = connect(t, tr.clientsidededupe, tr.volume)
-	assert.Nil(t, tr.connection)
+	assert.NotNil(t, tr.connection)
 
 	info, err := c.connection.GetVolumeInfo(ctx)
 	assert.Nil(t, err)
-	//time.Sleep(35 * time.Second)
+	time.Sleep(35 * time.Second)
 	cinfo, err := tr.connection.GetConnectedVolumes(ctx)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, len(cinfo))
@@ -845,45 +867,52 @@ func testCloudSync(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 	nfi, err := tr.connection.Stat(ctx, fn)
 	assert.Nil(t, err)
-	dh := readFile(ctx, t, &tr, fn, false)
+	dh, err := readFile(ctx, t, &tr, fn, false)
+	assert.Nil(t, err)
 	assert.Equal(t, dh, sh)
 	assert.Equal(t, fi.Mode, nfi.Mode)
 	err = c.connection.DeleteFile(ctx, fn)
 	assert.Nil(t, err)
-	cleanStore(t, c, 80)
-	dh = readFile(ctx, t, &tr, fn, false)
+	time.Sleep(15 * time.Second)
+	c.connection.CleanStore(ctx, true, true)
+	time.Sleep(65 * time.Second)
+	dh, err = readFile(ctx, t, &tr, fn, false)
+	assert.Nil(t, err)
 	assert.Equal(t, dh, sh)
 	fn, sh = makeGenericFile(ctx, t, c.connection, "", 1024)
 	_, err = c.connection.Stat(ctx, fn)
 	assert.Nil(t, err)
-	_, err = tr.connection.SyncCloudVolume(ctx, true)
+	_, err = tr.connection.GetCloudFile(ctx, fn, fmt.Sprintf("nf%s", fn), true, true)
 	assert.Nil(t, err)
 	time.Sleep(35 * time.Second)
-	dh = readFile(ctx, t, &tr, fn, false)
+	dh, err = readFile(ctx, t, &tr, fn, false)
+	assert.Nil(t, err)
 	assert.Equal(t, dh, sh)
 	assert.Equal(t, fi.Mode, nfi.Mode)
 	err = c.connection.DeleteFile(ctx, fn)
 	assert.Nil(t, err)
-	cleanStore(t, c, 80)
-	dh = readFile(ctx, t, &tr, fn, false)
+	time.Sleep(15 * time.Second)
+	c.connection.CleanStore(ctx, true, true)
+	time.Sleep(65 * time.Second)
+	dh, err = readFile(ctx, t, &tr, fn, false)
+	assert.Nil(t, err)
 	assert.Equal(t, dh, sh)
-	stopAndRemoveContainer(cli, containername)
+	StopAndRemoveContainer(ctx, containername)
 	portR = &paip.PortRedirectors{}
 	for _, c := range maddress {
 		portR.ForwardEntrys = append(portR.ForwardEntrys, *c.fe)
 	}
 	err = ioutil.WriteFile("testpf.json", b, 0644)
 	assert.Nil(t, err)
-	connection = connect(t, false, -1)
-	defer connection.CloseConnection(ctx)
-	_, err = connection.ReloadProxyConfig(ctx)
+	_, err = c.connection.ReloadProxyConfig(ctx)
 	assert.Nil(t, err)
-	vis, err = connection.GetProxyVolumes(ctx)
+	vis, err = c.connection.GetProxyVolumes(ctx)
 	if err != nil {
 		t.Logf("error %v", err)
 	}
 	assert.Nil(t, err)
 	assert.Equal(t, len(portR.ForwardEntrys), len(vis.VolumeInfoResponse))
+
 }
 
 func TestProxyVolumeInfo(t *testing.T) {
@@ -964,21 +993,14 @@ func TestReloadProxyVolume(t *testing.T) {
 func TestMain(m *testing.M) {
 
 	rand.Seed(time.Now().UTC().UnixNano())
-	var cli *client.Client
 	var err error
 	var port = 2
 
 	var containernames []string
-
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	if runtime.GOOS != "windows" {
 
-		cli, err = client.NewClientWithOpts(client.FromEnv)
-		if err != nil {
-			fmt.Printf("Unable to create docker client %v", err)
-		}
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		cli.NegotiateAPIVersion(ctx)
 		//create local s3 storage
 		mimagename := "docker.io/minio/minio:latest"
 		containername := "minio"
@@ -986,7 +1008,7 @@ func TestMain(m *testing.M) {
 		s3bucket := string(randBytesMaskImpr(16))
 		inputEnv := []string{fmt.Sprintf("MINIO_ROOT_USER=%s", "MINIO"), fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", "MINIO1234")}
 		cmd := []string{"server", "/data"}
-		_, err = runContainer(cli, mimagename, containername, portopening, portopening, inputEnv, cmd)
+		_, err = RunContainer(ctx, mimagename, containername, portopening, portopening, inputEnv, cmd, false)
 		if err != nil {
 			fmt.Printf("Unable to create minio service %v", err)
 		}
@@ -998,7 +1020,7 @@ func TestMain(m *testing.M) {
 
 		inputEnv = append(inputEnv, "DISABLE_TLS=true")
 		cmd = []string{}
-		_, err = runContainer(cli, imagename, containername, portopening, "6442", inputEnv, cmd)
+		_, err = RunContainer(ctx, imagename, containername, portopening, "6442", inputEnv, cmd, true)
 		if err != nil {
 			fmt.Printf("Unable to create docker client %v", err)
 		}
@@ -1015,7 +1037,7 @@ func TestMain(m *testing.M) {
 			fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
 		inputEnv = append(inputEnv, "DISABLE_TLS=true")
 		cmd = []string{}
-		_, err = runContainer(cli, imagename, containername, portopening, "6442", inputEnv, cmd)
+		_, err = RunContainer(ctx, imagename, containername, portopening, "6442", inputEnv, cmd, true)
 		if err != nil {
 			fmt.Printf("Unable to create docker client %v", err)
 		}
@@ -1059,7 +1081,7 @@ func TestMain(m *testing.M) {
 		inputEnv = []string{"TYPE=AZURE", fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("BUCKET_NAME=%s", os.Getenv("AZURE_BUCKET_NAME")), fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("SECRET_KEY=%s", os.Getenv("AZURE_SECRET_KEY")), fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
 		inputEnv = append(inputEnv, "DISABLE_TLS=true")
 		cmd = []string{}
-		_, err = runContainer(cli, imagename, containername, portopening, "6442", inputEnv, cmd)
+		_, err = RunContainer(ctx, imagename, containername, portopening, "6442", inputEnv, cmd, true)
 		if err != nil {
 			fmt.Printf("Unable to create docker client %v", err)
 		}
@@ -1097,7 +1119,8 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			fmt.Printf("Unable to create connection %v", err)
 		}
-		log.Printf("connected to volume = %d", connection.Volumeid)
+		log.Printf("connected to volume = %d for %s", connection.Volumeid, m.containerName)
+		m.volume = connection.Volumeid
 		cmp[connection.Volumeid] = connection.Clnt
 		fe = paip.ForwardEntry{
 			Address:       m.url,
@@ -1134,152 +1157,11 @@ func TestMain(m *testing.M) {
 	paip.StopServer()
 	if runtime.GOOS != "windows" {
 		for _, containername := range containernames {
-			stopAndRemoveContainer(cli, containername)
+			StopAndRemoveContainer(ctx, containername)
 		}
-		stopAndRemoveContainer(cli, "minio")
+		StopAndRemoveContainer(ctx, "minio")
 	}
 	os.Exit(code)
-}
-
-func runContainer(client *client.Client, imagename string, containername string, hostPort, port string, inputEnv []string, cmd []string) (string, error) {
-	// Define a PORT opening
-	newport, err := natting.NewPort("tcp", port)
-	if err != nil {
-		fmt.Println("Unable to create docker port")
-		return "", err
-	}
-
-	// Configured hostConfig:
-	// https://godoc.org/github.com/docker/docker/api/types/container#HostConfig
-	hostConfig := &container.HostConfig{
-		NetworkMode: "testnw",
-		PortBindings: natting.PortMap{
-			newport: []natting.PortBinding{
-				{
-					HostIP:   "0.0.0.0",
-					HostPort: hostPort,
-				},
-			},
-		},
-		RestartPolicy: container.RestartPolicy{
-			Name: "always",
-		},
-		LogConfig: container.LogConfig{
-			Type:   "json-file",
-			Config: map[string]string{},
-		},
-	}
-
-	// Define Network config (why isn't PORT in here...?:
-	// https://godoc.org/github.com/docker/docker/api/types/network#NetworkingConfig
-	networkConfig := &network.NetworkingConfig{
-		EndpointsConfig: map[string]*network.EndpointSettings{},
-	}
-	gatewayConfig := &network.EndpointSettings{
-		Gateway: "gatewayname",
-	}
-	networkConfig.EndpointsConfig["testnw"] = gatewayConfig
-
-	// Define ports to be exposed (has to be same as hostconfig.portbindings.newport)
-	exposedPorts := map[natting.Port]struct{}{
-		newport: {},
-	}
-
-	// Configuration
-	// https://godoc.org/github.com/docker/docker/api/types/container#Config
-	config := &container.Config{
-		Image:        imagename,
-		Env:          inputEnv,
-		ExposedPorts: exposedPorts,
-		Hostname:     containername,
-	}
-	if len(cmd) > 0 {
-		config.Cmd = cmd
-	}
-
-	// Creating the actual container. This is "nil,nil,nil" in every example.
-	cont, err := client.ContainerCreate(
-		context.Background(),
-		config,
-		hostConfig,
-		networkConfig, nil,
-		containername,
-	)
-
-	if err != nil {
-		log.Println(err)
-		return "", err
-	}
-
-	// Run the actual container
-	err = client.ContainerStart(context.Background(), cont.ID, types.ContainerStartOptions{})
-	if err != nil {
-		log.Println(err)
-		return "", err
-	}
-	log.Printf("Container %s is created", cont.ID)
-	go func() {
-		reader, err := client.ContainerLogs(context.Background(), cont.ID, types.ContainerLogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Follow:     true,
-			Timestamps: false,
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer reader.Close()
-		path := "logs"
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			err := os.Mkdir(path, os.ModePerm)
-			if err != nil {
-				log.Println(err)
-			}
-		}
-		fn := fmt.Sprintf("logs/%s-%s.log", containername, cont.ID)
-		f, err := os.Create(fn)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer f.Close()
-		w := bufio.NewWriter(f)
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			p := scanner.Bytes()
-			_, err := w.WriteString(fmt.Sprintln(string(p[8:])))
-			if err != nil {
-				log.Errorf("unable to write to %s", fn)
-				log.Error(err)
-			}
-		}
-		log.Infof("exiting reader for %s", fn)
-	}()
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return cont.ID, nil
-}
-
-func stopAndRemoveContainer(client *client.Client, containername string) error {
-	ctx := context.Background()
-	log.Printf("Stopping container %s", containername)
-	if err := client.ContainerStop(ctx, containername, nil); err != nil {
-		log.Printf("Unable to stop container %s: %s", containername, err)
-	}
-
-	removeOptions := types.ContainerRemoveOptions{
-		RemoveVolumes: true,
-		Force:         true,
-	}
-
-	if err := client.ContainerRemove(ctx, containername, removeOptions); err != nil {
-		log.Printf("Unable to remove container: %s", err)
-		return err
-	}
-
-	return nil
 }
 
 func makeFile(ctx context.Context, t *testing.T, c *testRun, parent string, size int64) (string, []byte) {
@@ -1316,9 +1198,11 @@ func makeGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConn
 		offset += int64(len(b))
 		b = nil
 	}
+
+	err = connection.Release(ctx, fh)
+	assert.Nil(t, err)
 	stat, _ = connection.GetAttr(ctx, fn)
-	assert.Equal(t, stat.Size, maxoffset)
-	_ = connection.Release(ctx, fh)
+	assert.Equal(t, size, stat.Size)
 	return fn, h.Sum(nil)
 }
 
@@ -1355,10 +1239,12 @@ func makeLargeBlockGenericFile(ctx context.Context, t *testing.T, connection *ap
 	return fn, h.Sum(nil)
 }
 
-func readFile(ctx context.Context, t *testing.T, c *testRun, filenm string, delete bool) []byte {
+func readFile(ctx context.Context, t *testing.T, c *testRun, filenm string, delete bool) (data []byte, err error) {
 	stat, err := c.connection.GetAttr(ctx, filenm)
 	assert.Nil(t, err)
-
+	if err != nil {
+		return data, err
+	}
 	assert.Greater(t, stat.Size, int64(0))
 	fh, err := c.connection.Open(ctx, filenm, 0)
 	assert.Nil(t, err)
@@ -1388,7 +1274,7 @@ func readFile(ctx context.Context, t *testing.T, c *testRun, filenm string, dele
 		assert.NotNil(t, err)
 	}
 	bs := h.Sum(nil)
-	return bs
+	return bs, nil
 }
 
 func deleteFile(t *testing.T, c *testRun, fn string) {
@@ -1419,11 +1305,73 @@ func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 		api.MtlsKey = "out/client_key.key"
 	}
 
-	connection, err := api.NewConnection(address, dedupe, true, volumeid, 4000000, 60)
+	connection, err := api.NewConnection(address, dedupe, true, volumeid, 40000, 60)
 	if err != nil {
 		t.Errorf("Unable to connect to %s error: %v\n", address, err)
 		return nil
 	}
 	t.Logf("Connection state %s", connection.Clnt.GetState())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	volinfo, err := connection.GetVolumeInfo(ctx)
+	assert.Nil(t, err)
+	if err != nil {
+
+		t.Errorf("Unable to get volume info for %s error: %v\n", address, err)
+		return nil
+	}
+	assert.Equal(t, volinfo.SerialNumber, volumeid)
+	if volinfo.SerialNumber != volumeid {
+		t.Errorf("Volume serial numbers don't match expected %d got %d\n", volumeid, volinfo.SerialNumber)
+		return nil
+	}
+	return connection
+}
+
+func dconnect(t *testing.T, c *testRun) *api.SdfsConnection {
+
+	//api.DisableTrust = true
+	api.Debug = false
+	api.UserName = "admin"
+	api.Password = "admin"
+	api.Mtls = false
+	var address = c.url
+	vid := int64(-1)
+	if !c.direct {
+		address = "sdfss://localhost:16442"
+		if tls {
+			address = "sdfss://localhost:16442"
+		}
+		if mtls {
+			api.Mtls = true
+			api.DisableTrust = true
+			api.MtlsCACert = "out/signer_key.crt"
+			api.MtlsCert = "out/client_key.crt"
+			api.MtlsKey = "out/client_key.key"
+		}
+		vid = c.volume
+	}
+	t.Logf("Connecting to %s dedupe is %v", address, c.clientsidededupe)
+
+	connection, err := api.NewConnection(address, c.clientsidededupe, true, vid, 40000, 60)
+	if err != nil {
+		t.Errorf("Unable to connect to %s error: %v\n", address, err)
+		return nil
+	}
+	t.Logf("Connection state %s", connection.Clnt.GetState())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	volinfo, err := connection.GetVolumeInfo(ctx)
+	assert.Nil(t, err)
+	if err != nil {
+
+		t.Errorf("Unable to get volume info for %s error: %v\n", address, err)
+		return nil
+	}
+	assert.Equal(t, volinfo.SerialNumber, c.volume)
+	if volinfo.SerialNumber != c.volume {
+		t.Errorf("Volume serial numbers don't match expected %d got %d\n", c.volume, volinfo.SerialNumber)
+		return nil
+	}
 	return connection
 }
