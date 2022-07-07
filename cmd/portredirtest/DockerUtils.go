@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -21,7 +23,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func CopyToContainer(ctx context.Context, container, srcPath, dstPath string) (err error) {
+var sdfsimagename = "gcr.io/hybrics/hybrics:dp3"
+
+func copyToContainer(ctx context.Context, container, srcPath, dstPath string) (err error) {
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		log.Fatal(err)
@@ -88,14 +92,14 @@ func CopyToContainer(ctx context.Context, container, srcPath, dstPath string) (e
 	return client.CopyToContainer(ctx, container, resolvedDstPath, content, options)
 }
 
-func RunContainer(ctx context.Context, imagename string, containername string, hostPort, port string, inputEnv []string, cmd []string, copyFile bool) (string, error) {
+func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer client.Close()
 	client.NegotiateAPIVersion(ctx)
-	newport, err := natting.NewPort("tcp", port)
+	newport, err := natting.NewPort("tcp", cfg.containerPort)
 	if err != nil {
 		fmt.Println("Unable to create docker port")
 		return "", err
@@ -109,7 +113,7 @@ func RunContainer(ctx context.Context, imagename string, containername string, h
 			newport: []natting.PortBinding{
 				{
 					HostIP:   "0.0.0.0",
-					HostPort: hostPort,
+					HostPort: cfg.hostPort,
 				},
 			},
 		},
@@ -140,13 +144,13 @@ func RunContainer(ctx context.Context, imagename string, containername string, h
 	// Configuration
 	// https://godoc.org/github.com/docker/docker/api/types/container#Config
 	config := &container.Config{
-		Image:        imagename,
-		Env:          inputEnv,
+		Image:        cfg.imagename,
+		Env:          cfg.inputEnv,
 		ExposedPorts: exposedPorts,
-		Hostname:     containername,
+		Hostname:     cfg.containername,
 	}
-	if len(cmd) > 0 {
-		config.Cmd = cmd
+	if len(cfg.cmd) > 0 {
+		config.Cmd = cfg.cmd
 	}
 
 	// Creating the actual container. This is "nil,nil,nil" in every example.
@@ -155,17 +159,17 @@ func RunContainer(ctx context.Context, imagename string, containername string, h
 		config,
 		hostConfig,
 		networkConfig, nil,
-		containername,
+		cfg.containername,
 	)
 	if err != nil {
 		log.Error(err)
 		return "", err
 	}
 	val, present := os.LookupEnv("SDFS_COPY_FILE_TO")
-	if present && copyFile {
+	if present && cfg.copyFile {
 		s := strings.Split(val, ":")
-		log.Infof("copy data %s to %s:%s", s[0], containername, s[1])
-		err = CopyToContainer(ctx, containername, s[0], s[1])
+		log.Infof("copy data %s to %s:%s", s[0], cfg.containername, s[1])
+		err = copyToContainer(ctx, cfg.containername, s[0], s[1])
 		if err != nil {
 			log.Error(err)
 			return "", err
@@ -198,7 +202,7 @@ func RunContainer(ctx context.Context, imagename string, containername string, h
 				log.Println(err)
 			}
 		}
-		fn := fmt.Sprintf("logs/%s-%s.log", containername, cont.ID)
+		fn := fmt.Sprintf("logs/%s-%s.log", cfg.containername, cont.ID)
 		f, err := os.Create(fn)
 		if err != nil {
 			log.Fatal(err)
@@ -229,6 +233,98 @@ func RunContainer(ctx context.Context, imagename string, containername string, h
 	}
 
 	return cont.ID, nil
+}
+
+func CreateAzureSetup(ctx context.Context, cfg *containerConfig) (*testRun, error) {
+	credential, err := azblob.NewSharedKeyCredential(os.Getenv("AZURE_ACCESS_KEY"), os.Getenv("AZURE_SECRET_KEY"))
+	p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
+	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", os.Getenv("AZURE_ACCESS_KEY")))
+	serviceURL := azblob.NewServiceURL(*u, p)
+	containerURL := serviceURL.NewContainerURL(os.Getenv("AZURE_BUCKET_NAME"))
+	for marker := (azblob.Marker{}); marker.NotDone(); { // The parens around Marker{} are required to avoid compiler error.
+		// Get a result segment starting with the blob indicated by the current Marker.
+		listBlob, err := containerURL.ListBlobsFlatSegment(ctx, marker, azblob.ListBlobsSegmentOptions{})
+		if err != nil {
+			log.Fatal(err)
+		}
+		// IMPORTANT: ListBlobs returns the start of the next segment; you MUST use this to get
+		// the next segment (after processing the current result segment).
+		marker = listBlob.NextMarker
+
+		// Process the blobs returned in this result segment (if the segment is empty, the loop body won't execute)
+		for _, blobInfo := range listBlob.Segment.BlobItems {
+			blobURL := containerURL.NewBlockBlobURL(blobInfo.Name)
+			_, err = blobURL.Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	cfg.imagename = sdfsimagename
+
+	cfg.inputEnv = []string{"TYPE=AZURE", fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("BUCKET_NAME=%s", os.Getenv("AZURE_BUCKET_NAME")), fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("SECRET_KEY=%s", os.Getenv("AZURE_SECRET_KEY")), fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
+	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
+	cfg.cmd = []string{}
+	cfg.copyFile = true
+	cfg.containerPort = "6442"
+	_, err = RunContainer(ctx, cfg)
+	if err != nil {
+		fmt.Printf("Unable to create docker client %v", err)
+		return nil, fmt.Errorf("Unable to create docker client %v", err)
+	}
+	aztr := &testRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "azurestorage", cfg: cfg, cloudVol: true}
+	return aztr, nil
+}
+
+func CreateS3Setup(ctx context.Context, cfg *containerConfig) (*testRun, error) {
+	mcfg := &containerConfig{
+		containername: "minio",
+		imagename:     "docker.io/minio/minio:latest",
+		hostPort:      "9000",
+		containerPort: "9000",
+		inputEnv:      []string{fmt.Sprintf("MINIO_ROOT_USER=%s", "MINIO"), fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", "MINIO1234")},
+		cmd:           []string{"server", "/data"},
+	}
+	_, err := RunContainer(ctx, mcfg)
+	if err != nil {
+		return nil, err
+	}
+	s3bucket := string(randBytesMaskImpr(16))
+	cfg.imagename = sdfsimagename
+
+	cfg.inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
+		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", s3bucket),
+		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
+	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
+	cfg.cmd = []string{}
+	cfg.copyFile = true
+	_, err = RunContainer(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	s3tr := &testRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "s3storage", cfg: cfg, cloudVol: true}
+	return s3tr, nil
+
+}
+
+func CreateBlockSetup(ctx context.Context, cfg *containerConfig) (*testRun, error) {
+	cfg.inputEnv = []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
+	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
+	cfg.imagename = sdfsimagename
+	cfg.containerPort = "6442"
+	cfg.copyFile = true
+	cfg.cmd = []string{}
+	_, err := RunContainer(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	btr := &testRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "blockstorage", cfg: cfg, cloudVol: false}
+	return btr, nil
+
 }
 
 func StopAndRemoveContainer(ctx context.Context, containername string) error {
