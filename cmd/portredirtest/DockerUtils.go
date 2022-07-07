@@ -15,6 +15,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	network "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
@@ -104,6 +105,7 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 		fmt.Println("Unable to create docker port")
 		return "", err
 	}
+	sw := int64(-1)
 
 	// Configured hostConfig:
 	// https://godoc.org/github.com/docker/docker/api/types/container#HostConfig
@@ -120,10 +122,29 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 		RestartPolicy: container.RestartPolicy{
 			Name: "always",
 		},
+		Resources: container.Resources{
+			MemorySwappiness: &sw,
+		},
+
 		LogConfig: container.LogConfig{
 			Type:   "json-file",
 			Config: map[string]string{},
 		},
+	}
+	if cfg.memory > 0 {
+		hostConfig.Resources.Memory = cfg.memory
+	}
+	if cfg.cpu > 0 {
+		hostConfig.Resources.NanoCPUs = cfg.cpu * 1000000000
+	}
+	if cfg.mountstorage {
+		hostConfig.Mounts = []mount.Mount{
+			{
+				Type:   mount.TypeBind,
+				Source: "/opt/sdfs",
+				Target: "/opt/sdfs",
+			},
+		}
 	}
 
 	// Define Network config (why isn't PORT in here...?:
@@ -266,8 +287,13 @@ func CreateAzureSetup(ctx context.Context, cfg *containerConfig) (*testRun, erro
 	}
 	cfg.imagename = sdfsimagename
 
-	cfg.inputEnv = []string{"TYPE=AZURE", fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("BUCKET_NAME=%s", os.Getenv("AZURE_BUCKET_NAME")), fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("SECRET_KEY=%s", os.Getenv("AZURE_SECRET_KEY")), fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
+	cfg.inputEnv = []string{"TYPE=AZURE", fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("BUCKET_NAME=%s", os.Getenv("AZURE_BUCKET_NAME")), fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("SECRET_KEY=%s", os.Getenv("AZURE_SECRET_KEY")), fmt.Sprintf("CAPACITY=%s", "1TB")}
 	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
+	if cfg.encrypt {
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --chunk-store-encrypt=true")
+	} else {
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000")
+	}
 	cfg.cmd = []string{}
 	cfg.copyFile = true
 	cfg.containerPort = "6442"
@@ -300,6 +326,11 @@ func CreateS3Setup(ctx context.Context, cfg *containerConfig) (*testRun, error) 
 		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", s3bucket),
 		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
 	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
+	if cfg.encrypt {
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled --chunk-store-encrypt=true")
+	} else {
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled")
+	}
 	cfg.cmd = []string{}
 	cfg.copyFile = true
 	_, err = RunContainer(ctx, cfg)
@@ -312,8 +343,13 @@ func CreateS3Setup(ctx context.Context, cfg *containerConfig) (*testRun, error) 
 }
 
 func CreateBlockSetup(ctx context.Context, cfg *containerConfig) (*testRun, error) {
-	cfg.inputEnv = []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000"}
+	cfg.inputEnv = []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "1TB")}
 	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
+	if cfg.encrypt {
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --chunk-store-encrypt=true")
+	} else {
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000")
+	}
 	cfg.imagename = sdfsimagename
 	cfg.containerPort = "6442"
 	cfg.copyFile = true

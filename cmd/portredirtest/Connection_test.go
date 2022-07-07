@@ -1,9 +1,13 @@
 package test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"os/exec"
+	"reflect"
 	"runtime"
+	"sync"
 
 	"fmt"
 	"io/ioutil"
@@ -23,10 +27,10 @@ import (
 )
 
 type containerConfig struct {
-	cpu                                               int
-	memory                                            int
+	cpu                                               int64
+	memory                                            int64
 	encrypt                                           bool
-	storage                                           string
+	mountstorage                                      bool
 	imagename, containername, hostPort, containerPort string
 	inputEnv, cmd                                     []string
 	copyFile                                          bool
@@ -82,12 +86,10 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			case "S3":
 				cfg := &containerConfig{containername: "s3-6442", hostPort: "6442"}
 				//c.cfg = cfg
-
 				c, err = CreateS3Setup(ctx, cfg)
 				c.name = n
 				c.cloudVol = true
 				assert.Nil(t, err)
-
 			}
 			switch z := testType; z {
 			case "PROXYDEDUPE":
@@ -101,7 +103,7 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			}
 			trs := []*testRun{c}
 			if !c.direct {
-				reloadProxyVolume(trs)
+				startProxyVolume(trs)
 			}
 			testNewProxyConnection(t, c)
 			t.Run("testConnection", func(t *testing.T) {
@@ -197,6 +199,340 @@ func runMatix(t *testing.T, testType string, tests []string) {
 		})
 
 	}
+}
+
+func BenchmarkWrites(b *testing.B) {
+	type ut struct {
+		name string
+		pu   int
+	}
+	type st struct {
+		name string
+		sz   int64
+	}
+	tests := []string{"AZURE", "S3", "BLOCK"}
+	testTypes := []string{"PROXY", "PROXYDEDUPE", "DIRECTDEDUPE"}
+	uTest := []ut{{name: "0PercentUnique", pu: 0}, {name: "50PercentUnique", pu: 50}, {name: "100PercentUnique", pu: 100}}
+	sTest := []st{{name: "1GB", sz: int64(1) * gb}, {name: "10GB", sz: int64(10) * gb},
+		{name: "100GB", sz: int64(100) * gb}, {name: "900GB", sz: int64(900) * gb}}
+	tTest := []int{1, 2, 4, 8}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for _, testType := range testTypes {
+		for _, name := range tests {
+			var c *testRun
+			var err error
+			b.Run(fmt.Sprintf("%s/%s", testType, name), func(b *testing.B) {
+				//remove old data
+				cmd := exec.Command("sudo", "rm", "-rf", "/opt/sdfs/volumes")
+
+				var out bytes.Buffer
+				cmd.Stdout = &out
+
+				err = cmd.Run()
+
+				if err != nil {
+					log.Fatal(err)
+				}
+				switch n := name; n {
+				case "AZURE":
+					cfg := &containerConfig{containername: "azure-6442", hostPort: "6442", mountstorage: true, cpu: 4}
+					//c.cfg = cfg
+					c, err = CreateAzureSetup(ctx, cfg)
+					if err != nil {
+						b.Logf("error creating container %v", err)
+					}
+					c.name = n
+					c.cloudVol = true
+				case "BLOCK":
+					cfg := &containerConfig{containername: "block-6442", hostPort: "6442", mountstorage: true}
+					//c.cfg = cfg
+					c, err = CreateBlockSetup(ctx, cfg)
+					if err != nil {
+						b.Logf("error creating container %v", err)
+					}
+					c.name = n
+					c.cloudVol = false
+				case "S3":
+					cfg := &containerConfig{containername: "s3-6442", hostPort: "6442", mountstorage: true, cpu: 4}
+					//c.cfg = cfg
+					c, err = CreateS3Setup(ctx, cfg)
+					if err != nil {
+						b.Logf("error creating container %v", err)
+					}
+					c.name = n
+					c.cloudVol = true
+				}
+				switch z := testType; z {
+				case "PROXYDEDUPE":
+					c.clientsidededupe = true
+				case "DIRECTDEDUPE":
+					c.clientsidededupe = true
+					c.direct = true
+				case "PROXY":
+					c.clientsidededupe = false
+					c.direct = false
+				}
+				trs := []*testRun{c}
+				if !c.direct {
+					startProxyVolume(trs)
+				}
+				c.connection = benchmarkConnect(b, c)
+				for _, pu := range uTest {
+					b.Run(pu.name, func(b *testing.B) {
+						for _, st := range sTest {
+							b.Run(st.name, func(b *testing.B) {
+								for _, tt := range tTest {
+									b.Run(fmt.Sprintf("WriteThreads%d", tt), func(b *testing.B) {
+										//parallel write
+										b.Run("parallelBenchmarkWrite32", func(b *testing.B) {
+											parallelBenchmarkWrite(b, c, 32, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkWrite64", func(b *testing.B) {
+											parallelBenchmarkWrite(b, c, 64, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkWrite128", func(b *testing.B) {
+											parallelBenchmarkWrite(b, c, 128, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkWrite256", func(b *testing.B) {
+											parallelBenchmarkWrite(b, c, 256, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkWrite512", func(b *testing.B) {
+											parallelBenchmarkWrite(b, c, 512, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkWrite1024", func(b *testing.B) {
+											parallelBenchmarkWrite(b, c, 1024, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkWrite2048", func(b *testing.B) {
+											parallelBenchmarkWrite(b, c, 2048, st.sz, pu.pu, tt)
+										})
+									})
+									b.Run(fmt.Sprintf("ReadThreads%d", tt), func(b *testing.B) {
+										//parallel read
+										b.Run("parallelBenchmarkRead32", func(b *testing.B) {
+											parallelBenchmarkRead(b, c, 32, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkRead64", func(b *testing.B) {
+											parallelBenchmarkRead(b, c, 64, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkRead128", func(b *testing.B) {
+											parallelBenchmarkRead(b, c, 128, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkRead256", func(b *testing.B) {
+											parallelBenchmarkRead(b, c, 256, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkRead512", func(b *testing.B) {
+											parallelBenchmarkRead(b, c, 512, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkRead1024", func(b *testing.B) {
+											parallelBenchmarkRead(b, c, 1024, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkRead2048", func(b *testing.B) {
+											parallelBenchmarkRead(b, c, 2048, st.sz, pu.pu, tt)
+										})
+									})
+								}
+							})
+						}
+					})
+				}
+				c.connection.CloseConnection(ctx)
+				if !c.direct {
+					paip.StopServer()
+				}
+
+				StopAndRemoveContainer(ctx, c.cfg.containername)
+			})
+		}
+	}
+
+}
+
+func parallelBenchmarkWrite(b *testing.B, c *testRun, blockSize int, fileSize int64, percentUnique, threads int) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	type th struct {
+		fn         string
+		fh         int64
+		bt         []byte
+		offset     int64
+		connection *api.SdfsConnection
+	}
+	inv := 100 - percentUnique
+	blockSz := 1024 * blockSize
+	for i := 0; i < b.N; i++ {
+		var ths []*th
+		for z := 0; z < threads; z++ {
+			fn := string(randBytesMaskImpr(16))
+			connection := benchmarkConnect(b, c)
+			connection.MkNod(ctx, fn, 511, 0)
+			connection.GetAttr(ctx, fn)
+			fh, err := connection.Open(ctx, fn, 0)
+			if err != nil {
+				b.Errorf("error getting filehandle %v", err)
+				return
+			}
+			offset := int64(0)
+
+			bt := randBytesMaskImpr(blockSz)
+			thh := &th{fn: fn, fh: fh, offset: offset, bt: bt, connection: connection}
+			ths = append(ths, thh)
+		}
+		b.StartTimer()
+		wg := &sync.WaitGroup{}
+		wg.Add(threads)
+		for z := 0; z < threads; z++ {
+			thh := ths[z]
+			go func() {
+
+				ct := 0
+				for thh.offset < fileSize {
+					thh.connection.Write(ctx, thh.fh, thh.bt, thh.offset, int32(len(thh.bt)))
+					thh.offset += int64(len(thh.bt))
+					ct++
+					if ct > inv {
+						thh.bt = randBytesMaskImpr(blockSz)
+					}
+					if ct == 100 {
+						ct = 0
+					}
+				}
+				thh.connection.Release(ctx, thh.fh)
+				thh.connection.CloseConnection(ctx)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+		b.StopTimer()
+		var sz int64
+		for z := 0; z < threads; z++ {
+			sz += ths[z].offset
+			c.connection.Unlink(ctx, ths[z].fn)
+		}
+		b.SetBytes(sz)
+
+	}
+
+}
+
+func parallelBenchmarkRead(b *testing.B, c *testRun, blockSize int, fileSize int64, percentUnique, threads int) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	type th struct {
+		fn         string
+		fh         int64
+		bt         []byte
+		offset     int64
+		connection *api.SdfsConnection
+		sum        []byte
+	}
+	inv := 100 - percentUnique
+	blockSz := 1024 * blockSize
+	for i := 0; i < b.N; i++ {
+		var ths []*th
+		for z := 0; z < threads; z++ {
+			fn := string(randBytesMaskImpr(16))
+			connection := benchmarkConnect(b, c)
+			connection.MkNod(ctx, fn, 511, 0)
+			connection.GetAttr(ctx, fn)
+			fh, err := connection.Open(ctx, fn, 0)
+			if err != nil {
+				b.Errorf("error getting filehandle %v", err)
+				return
+			}
+			offset := int64(0)
+
+			bt := randBytesMaskImpr(blockSz)
+			thh := &th{fn: fn, fh: fh, offset: offset, bt: bt, connection: connection}
+			ths = append(ths, thh)
+		}
+		wg := &sync.WaitGroup{}
+		wg.Add(threads)
+
+		for z := 0; z < threads; z++ {
+			thh := ths[z]
+			go func() {
+				h, err := blake2b.New(32, make([]byte, 0))
+				if err != nil {
+					b.Errorf("error getting hash %v", err)
+					return
+				}
+				ct := 0
+				for thh.offset < fileSize {
+					thh.connection.Write(ctx, thh.fh, thh.bt, thh.offset, int32(len(thh.bt)))
+					h.Write(thh.bt)
+					thh.offset += int64(len(thh.bt))
+					ct++
+					if ct > inv {
+						thh.bt = randBytesMaskImpr(blockSz)
+					}
+					if ct == 100 {
+						ct = 0
+					}
+				}
+				thh.sum = h.Sum(nil)
+				thh.connection.Release(ctx, thh.fh)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+
+		var sz int64
+		wg = &sync.WaitGroup{}
+		wg.Add(threads)
+		b.StartTimer()
+		for z := 0; z < threads; z++ {
+			thh := ths[z]
+			go func() {
+				stat, err := thh.connection.GetAttr(ctx, thh.fn)
+				if err != nil {
+					b.Errorf("error getting attr %v", err)
+					return
+				}
+				fh, err := thh.connection.Open(ctx, thh.fn, 0)
+				if err != nil {
+					b.Errorf("error opening file %v", err)
+					return
+				}
+				maxoffset := stat.Size
+				offset := int64(0)
+				bt := make([]byte, 0)
+				h, err := blake2b.New(32, bt)
+				if err != nil {
+					b.Errorf("error getting hash %v", err)
+					return
+				}
+				readSize := int32(blockSz)
+				for offset < maxoffset {
+					if readSize > int32(maxoffset-offset) {
+						readSize = int32(maxoffset - offset)
+					}
+					bt, err = thh.connection.Read(ctx, fh, offset, int32(readSize))
+					if err != nil {
+						b.Errorf("error reading data %v", err)
+						return
+					}
+					h.Write(bt)
+					offset += int64(len(bt))
+					bt = nil
+				}
+				if !reflect.DeepEqual(h.Sum(nil), thh.sum) {
+					b.Errorf("read and write equal: %t\n", reflect.DeepEqual(h.Sum(nil), thh.sum))
+				}
+				thh.connection.Release(ctx, fh)
+				thh.connection.CloseConnection(ctx)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+		b.StopTimer()
+		for z := 0; z < threads; z++ {
+			sz += ths[z].offset
+			c.connection.Unlink(ctx, ths[z].fn)
+		}
+		b.SetBytes(sz)
+	}
+
 }
 
 func TestMatrix(t *testing.T) {
@@ -941,14 +1277,24 @@ func testCloudSync(t *testing.T, c *testRun) {
 
 }
 
-/*
 func TestProxyVolumeInfo(t *testing.T) {
-	var volumeIds []int64
-	for _, c := range maddress {
-		volumeIds = append(volumeIds, c.volume)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	var port = 2
+	var testRuns []*testRun
+	for i := 2; i < 4; i++ {
+		cfg := &containerConfig{containername: fmt.Sprintf("block-644%d", port), hostPort: fmt.Sprintf("644%d", port)}
+		tst, err := CreateBlockSetup(ctx, cfg)
+		assert.Nil(t, err)
+		port++
+		testRuns = append(testRuns, tst)
+	}
+	startProxyVolume(testRuns)
+	var volumeIds []int64
+	for _, c := range testRuns {
+		volumeIds = append(volumeIds, c.volume)
+	}
+
 	connection := connect(t, false, -1)
 	vis, err := connection.GetProxyVolumes(ctx)
 	if err != nil {
@@ -961,16 +1307,59 @@ func TestProxyVolumeInfo(t *testing.T) {
 		t.Logf("serial = %d", vi.SerialNumber)
 	}
 	assert.ElementsMatch(t, vids, volumeIds)
+	paip.StopServer()
+	for _, c := range testRuns {
+		StopAndRemoveContainer(ctx, c.cfg.containername)
+	}
 }
 
 func TestReloadProxyVolume(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var testRuns []*testRun
+	for i := 2; i < 5; i++ {
+		cfg := &containerConfig{containername: fmt.Sprintf("block-644%d", i), hostPort: fmt.Sprintf("644%d", i)}
+		tst, err := CreateBlockSetup(ctx, cfg)
+		assert.Nil(t, err)
+		testRuns = append(testRuns, tst)
+	}
+	startProxyVolume(testRuns[1:])
 	var volumeIds []int64
-	for _, c := range maddress {
+	for _, c := range testRuns[1:] {
+		t.Logf("tr serial = %d", c.volume)
 		volumeIds = append(volumeIds, c.volume)
 	}
-
+	connection := connect(t, false, -1)
+	vis, err := connection.GetProxyVolumes(ctx)
+	assert.Nil(t, err)
+	var vids []int64
+	for _, vi := range vis.VolumeInfoResponse {
+		vids = append(vids, vi.SerialNumber)
+		t.Logf("serial = %d", vi.SerialNumber)
+	}
+	assert.ElementsMatch(t, vids, volumeIds)
+	//Get the volume id for the first volume
+	cc, err := api.NewConnection(testRuns[0].url, false, true, -1, 0, 0)
+	retrys := 0
+	for err != nil {
+		log.Printf("retries = %d", retrys)
+		time.Sleep(20 * time.Second)
+		cc, err = api.NewConnection(testRuns[0].url, false, true, -1, 0, 0)
+		if retrys > 10 {
+			fmt.Printf("SDFS Server connection timed out %s\n", testRuns[0].url)
+			os.Exit(-1)
+		} else {
+			retrys++
+		}
+	}
+	if err != nil {
+		fmt.Printf("Unable to create connection %v", err)
+	}
+	log.Printf("connected to volume = %d for %s", cc.Volumeid, testRuns[0].cfg.containername)
+	testRuns[0].volume = cc.Volumeid
+	//Test Add a Volume
 	portR := &paip.PortRedirectors{}
-	for i := 2; i < 4; i++ {
+	for i := 2; i < 5; i++ {
 		fe := paip.ForwardEntry{Address: fmt.Sprintf("sdfs://localhost:644%d", i)}
 		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
 	}
@@ -978,22 +1367,25 @@ func TestReloadProxyVolume(t *testing.T) {
 	assert.Nil(t, err)
 	err = ioutil.WriteFile("testpf.json", b, 0644)
 	assert.Nil(t, err)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	connection := connect(t, false, -1)
 	_, err = connection.ReloadProxyConfig(ctx)
 	assert.Nil(t, err)
-	vis, err := connection.GetProxyVolumes(ctx)
-	if err != nil {
-		t.Logf("error %v", err)
-	}
+	vis, err = connection.GetProxyVolumes(ctx)
 	assert.Nil(t, err)
+	vids = make([]int64, 0)
+	volumeIds = make([]int64, 0)
+
+	for _, c := range testRuns {
+		volumeIds = append(volumeIds, c.volume)
+		t.Logf("tr serial = %d", c.volume)
+	}
 	for _, vi := range vis.VolumeInfoResponse {
+		vids = append(vids, vi.SerialNumber)
 		t.Logf("serial = %d", vi.SerialNumber)
 	}
-	assert.Equal(t, 2, len(vis.VolumeInfoResponse)-2)
+	assert.ElementsMatch(t, vids, volumeIds)
+	//Test Remove a volume
 	portR = &paip.PortRedirectors{}
-	for i := 2; i < 5; i++ {
+	for i := 2; i < 4; i++ {
 		fe := paip.ForwardEntry{Address: fmt.Sprintf("sdfs://localhost:644%d", i)}
 		portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
 	}
@@ -1004,21 +1396,28 @@ func TestReloadProxyVolume(t *testing.T) {
 	_, err = connection.ReloadProxyConfig(ctx)
 	assert.Nil(t, err)
 	vis, err = connection.GetProxyVolumes(ctx)
-	if err != nil {
-		t.Logf("error %v", err)
-	}
 	assert.Nil(t, err)
-	var vids []int64
+	vids = make([]int64, 0)
+	volumeIds = make([]int64, 0)
+
+	for _, c := range testRuns[:len(testRuns)-1] {
+		volumeIds = append(volumeIds, c.volume)
+		t.Logf("tr serial = %d", c.volume)
+	}
 	for _, vi := range vis.VolumeInfoResponse {
 		vids = append(vids, vi.SerialNumber)
 		t.Logf("serial = %d", vi.SerialNumber)
 	}
 	assert.ElementsMatch(t, vids, volumeIds)
+	//Shut everything down
+	paip.StopServer()
+	for _, c := range testRuns {
+		StopAndRemoveContainer(ctx, c.cfg.containername)
+	}
 
 }
-*/
 
-func reloadProxyVolume(tr []*testRun) {
+func startProxyVolume(tr []*testRun) {
 	tls = true
 	api.DisableTrust = true
 	paip.ServerCACert = "out/signer_key.crt"
@@ -1117,19 +1516,69 @@ func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 		return nil
 	}
 	t.Logf("Connection state %s", connection.Clnt.GetState())
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	volinfo, err := connection.GetVolumeInfo(ctx)
-	assert.Nil(t, err)
-	if err != nil {
+	if volumeid != -1 {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		volinfo, err := connection.GetVolumeInfo(ctx)
+		assert.Nil(t, err)
+		if err != nil {
 
-		t.Errorf("Unable to get volume info for %s error: %v\n", address, err)
+			t.Errorf("Unable to get volume info for %s error: %v\n", address, err)
+			return nil
+		}
+		assert.Equal(t, volinfo.SerialNumber, volumeid)
+		if volinfo.SerialNumber != volumeid {
+			t.Errorf("Volume serial numbers don't match expected %d got %d\n", volumeid, volinfo.SerialNumber)
+			return nil
+		}
+	}
+	return connection
+}
+
+func benchmarkConnect(b *testing.B, c *testRun) *api.SdfsConnection {
+
+	//api.DisableTrust = true
+	api.Debug = false
+	api.UserName = "admin"
+	api.Password = "admin"
+	api.Mtls = false
+	var address = c.url
+	vid := int64(-1)
+	if !c.direct {
+		address = "sdfss://localhost:16442"
+		if tls {
+			address = "sdfss://localhost:16442"
+		}
+		if mtls {
+			api.Mtls = true
+			api.DisableTrust = true
+			api.MtlsCACert = "out/signer_key.crt"
+			api.MtlsCert = "out/client_key.crt"
+			api.MtlsKey = "out/client_key.key"
+		}
+		vid = c.volume
+	}
+	b.Logf("Connecting to %s dedupe is %v", address, c.clientsidededupe)
+
+	connection, err := api.NewConnection(address, c.clientsidededupe, true, vid, 40000, 60)
+	if err != nil {
+		b.Errorf("Unable to connect to %s error: %v\n", address, err)
 		return nil
 	}
-	assert.Equal(t, volinfo.SerialNumber, volumeid)
-	if volinfo.SerialNumber != volumeid {
-		t.Errorf("Volume serial numbers don't match expected %d got %d\n", volumeid, volinfo.SerialNumber)
-		return nil
+	b.Logf("Connection state %s", connection.Clnt.GetState())
+	if vid != -1 {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		volinfo, err := connection.GetVolumeInfo(ctx)
+		if err != nil {
+
+			b.Errorf("Unable to get volume info for %s error: %v\n", address, err)
+			return nil
+		}
+		if volinfo.SerialNumber != c.volume {
+			b.Errorf("Volume serial numbers don't match expected %d got %d\n", c.volume, volinfo.SerialNumber)
+			return nil
+		}
 	}
 	return connection
 }
@@ -1165,19 +1614,21 @@ func dconnect(t *testing.T, c *testRun) *api.SdfsConnection {
 		return nil
 	}
 	t.Logf("Connection state %s", connection.Clnt.GetState())
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	volinfo, err := connection.GetVolumeInfo(ctx)
-	assert.Nil(t, err)
-	if err != nil {
+	if vid != -1 {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		volinfo, err := connection.GetVolumeInfo(ctx)
+		assert.Nil(t, err)
+		if err != nil {
 
-		t.Errorf("Unable to get volume info for %s error: %v\n", address, err)
-		return nil
-	}
-	assert.Equal(t, volinfo.SerialNumber, c.volume)
-	if volinfo.SerialNumber != c.volume {
-		t.Errorf("Volume serial numbers don't match expected %d got %d\n", c.volume, volinfo.SerialNumber)
-		return nil
+			t.Errorf("Unable to get volume info for %s error: %v\n", address, err)
+			return nil
+		}
+		assert.Equal(t, volinfo.SerialNumber, c.volume)
+		if volinfo.SerialNumber != c.volume {
+			t.Errorf("Volume serial numbers don't match expected %d got %d\n", c.volume, volinfo.SerialNumber)
+			return nil
+		}
 	}
 	return connection
 }
