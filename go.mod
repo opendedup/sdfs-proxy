@@ -2,7 +2,7 @@ module github.com/opendedup/sdfs-proxy
 
 go 1.16
 
-replace github.com/opendedup/sdfs-client-go => /home/samsilverberg/git/sdfs-client-go
+//replace github.com/opendedup/sdfs-client-go => /home/samsilverberg/git/sdfs-client-go
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.15.0
@@ -14,7 +14,7 @@ require (
 	github.com/fvbommel/sortorder v1.0.2 // indirect
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/moby/sys/mount v0.3.3 // indirect
-	github.com/opendedup/sdfs-client-go v0.1.37-0.20220626230537-8a7b1263fafd
+	github.com/opendedup/sdfs-client-go v0.1.37-0.20220707040926-8a628a548e77
 	github.com/sevlyar/go-daemon v0.1.5
 	github.com/shirou/gopsutil/v3 v3.22.1
 	github.com/sirupsen/logrus v1.8.1

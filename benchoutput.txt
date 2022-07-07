@@ -396,3 +396,29 @@ BenchmarkWrites/PROXY/BLOCK/0PercentUnique/1GB/ReadThreads8/parallelBenchmarkRea
     Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
     Connection_test.go:1568: Connection state READY
 	... [output truncated]
+BenchmarkWrites/PROXY/BLOCK/0PercentUnique/1GB/ReadThreads8/parallelBenchmarkRead64-8           	       1	88260917012 ns/op	  97.32 MB/s	102156743072 B/op	83217892 allocs/op
+--- BENCH: BenchmarkWrites/PROXY/BLOCK/0PercentUnique/1GB/ReadThreads8/parallelBenchmarkRead64-8
+    Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
+    Connection_test.go:1568: Connection state READY
+    Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
+    Connection_test.go:1568: Connection state READY
+    Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
+    Connection_test.go:1568: Connection state READY
+    Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
+    Connection_test.go:1568: Connection state READY
+    Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
+    Connection_test.go:1568: Connection state READY
+	... [output truncated]
+BenchmarkWrites/PROXY/BLOCK/0PercentUnique/1GB/ReadThreads8/parallelBenchmarkRead128-8          	       1	69694822150 ns/op	 123.25 MB/s	95042155704 B/op	42565162 allocs/op
+--- BENCH: BenchmarkWrites/PROXY/BLOCK/0PercentUnique/1GB/ReadThreads8/parallelBenchmarkRead128-8
+    Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
+    Connection_test.go:1568: Connection state READY
+    Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
+    Connection_test.go:1568: Connection state READY
+    Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
+    Connection_test.go:1568: Connection state READY
+    Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
+    Connection_test.go:1568: Connection state READY
+    Connection_test.go:1561: Connecting to sdfss://localhost:16442 dedupe is false
+    Connection_test.go:1568: Connection state READY
+	... [output truncated]
