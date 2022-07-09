@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
@@ -19,6 +20,8 @@ type StorageServiceProxy struct {
 }
 
 func (s *StorageServiceProxy) HashingInfo(ctx context.Context, req *spb.HashingInfoRequest) (*spb.HashingInfoResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
@@ -33,6 +36,8 @@ func (s *StorageServiceProxy) HashingInfo(ctx context.Context, req *spb.HashingI
 }
 
 func (s *StorageServiceProxy) CheckHashes(ctx context.Context, req *spb.CheckHashesRequest) (*spb.CheckHashesResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
@@ -50,6 +55,8 @@ func (s *StorageServiceProxy) CheckHashes(ctx context.Context, req *spb.CheckHas
 }
 
 func (s *StorageServiceProxy) WriteChunks(ctx context.Context, req *spb.WriteChunksRequest) (*spb.WriteChunksResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
@@ -67,6 +74,8 @@ func (s *StorageServiceProxy) WriteChunks(ctx context.Context, req *spb.WriteChu
 }
 
 func (s *StorageServiceProxy) ReadChunks(ctx context.Context, req *spb.ReadChunksRequest) (*spb.ReadChunksResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
@@ -82,6 +91,8 @@ func (s *StorageServiceProxy) ReadChunks(ctx context.Context, req *spb.ReadChunk
 }
 
 func (s *StorageServiceProxy) WriteSparseDataChunk(ctx context.Context, req *spb.SparseDedupeChunkWriteRequest) (*spb.SparseDedupeChunkWriteResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
@@ -98,6 +109,8 @@ func (s *StorageServiceProxy) WriteSparseDataChunk(ctx context.Context, req *spb
 }
 
 func (s *StorageServiceProxy) ReadSparseDataChunk(ctx context.Context, req *spb.SparseDedupeChunkReadRequest) (*spb.SparseDedupeChunkReadResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
@@ -113,6 +126,8 @@ func (s *StorageServiceProxy) ReadSparseDataChunk(ctx context.Context, req *spb.
 }
 
 func (s *StorageServiceProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, debug bool) error {
+	log.Debug("in")
+	defer log.Debug("out")
 	s.configLock.Lock()
 	defer s.configLock.Unlock()
 	vcm := make(map[int64]spb.StorageServiceClient)
@@ -128,6 +143,8 @@ func (s *StorageServiceProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, 
 }
 
 func (s *StorageServiceProxy) GetMetaDataDedupeFile(req *spb.MetaDataDedupeFileRequest, stream spb.StorageService_GetMetaDataDedupeFileServer) error {
+	log.Debug("in")
+	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
@@ -157,6 +174,8 @@ func (s *StorageServiceProxy) GetMetaDataDedupeFile(req *spb.MetaDataDedupeFileR
 }
 
 func (s *StorageServiceProxy) GetSparseDedupeFile(req *spb.SparseDedupeFileRequest, stream spb.StorageService_GetSparseDedupeFileServer) error {
+	log.Debug("in")
+	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
@@ -188,6 +207,8 @@ func NewStorageService(clnts map[int64]*grpc.ClientConn, proxy, debug bool) *Sto
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
+	log.SetReportCaller(true)
+	log.SetOutput(os.Stdout)
 	vcm := make(map[int64]spb.StorageServiceClient)
 	var defaultVolume int64
 	for indx, clnt := range clnts {

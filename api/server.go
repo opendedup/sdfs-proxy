@@ -43,11 +43,15 @@ var remoteTLS bool
 var ecc []sdfs.EncryptionServiceClient
 
 func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor, remoteServerCert bool) {
+	log.Debug("in")
+	defer log.Debug("out")
 	password = pwd
 	authenticate = enableAuth
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
+	log.SetOutput(os.Stdout)
+	log.SetReportCaller(true)
 	fc, err := NewFileIOProxy(Connections, dedupe, proxy, debug)
 	if err != nil {
 		log.Errorf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
@@ -215,7 +219,8 @@ func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentia
 }
 
 func customVerify(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	log.Debug("Verify certs")
+	log.Debug("in")
+	defer log.Debug("out")
 	serverConfigLock.RLock()
 	defer serverConfigLock.RUnlock()
 	for i := 0; i < len(rawCerts); i++ {

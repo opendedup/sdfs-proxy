@@ -245,7 +245,7 @@ func BenchmarkWrites(b *testing.B) {
 					c.name = n
 					c.cloudVol = true
 				case "BLOCK":
-					cfg := &containerConfig{containername: "block-6442", hostPort: "6442", mountstorage: true}
+					cfg := &containerConfig{containername: "block-6442", hostPort: "6442", mountstorage: true, memory: 16 * gb}
 					//c.cfg = cfg
 					c, err = CreateBlockSetup(ctx, cfg)
 					if err != nil {
@@ -278,6 +278,15 @@ func BenchmarkWrites(b *testing.B) {
 					startProxyVolume(trs)
 				}
 				c.connection = benchmarkConnect(b, c)
+				cc := 0
+				for c.connection == nil {
+					time.Sleep(15 * time.Second)
+					c.connection = benchmarkConnect(b, c)
+					cc++
+					if cc > 5 {
+						b.Errorf("unable to connect to volume")
+					}
+				}
 				for _, pu := range uTest {
 					b.Run(pu.name, func(b *testing.B) {
 						for _, st := range sTest {
@@ -387,7 +396,11 @@ func parallelBenchmarkWrite(b *testing.B, c *testRun, blockSize int, fileSize in
 
 				ct := 0
 				for thh.offset < fileSize {
-					thh.connection.Write(ctx, thh.fh, thh.bt, thh.offset, int32(len(thh.bt)))
+					err := thh.connection.Write(ctx, thh.fh, thh.bt, thh.offset, int32(len(thh.bt)))
+					if err != nil {
+						b.Errorf("error writing data at %d  %v", thh.offset, err)
+						return
+					}
 					thh.offset += int64(len(thh.bt))
 					ct++
 					if ct > inv {
@@ -459,7 +472,11 @@ func parallelBenchmarkRead(b *testing.B, c *testRun, blockSize int, fileSize int
 				}
 				ct := 0
 				for thh.offset < fileSize {
-					thh.connection.Write(ctx, thh.fh, thh.bt, thh.offset, int32(len(thh.bt)))
+					err := thh.connection.Write(ctx, thh.fh, thh.bt, thh.offset, int32(len(thh.bt)))
+					if err != nil {
+						b.Errorf("error writing data at %d  %v", thh.offset, err)
+						return
+					}
 					h.Write(thh.bt)
 					thh.offset += int64(len(thh.bt))
 					ct++
@@ -504,7 +521,7 @@ func parallelBenchmarkRead(b *testing.B, c *testRun, blockSize int, fileSize int
 				}
 				readSize := int32(blockSz)
 				for offset < maxoffset {
-					if readSize > int32(maxoffset-offset) {
+					if int64(readSize) > int64(maxoffset-offset) {
 						readSize = int32(maxoffset - offset)
 					}
 					bt, err = thh.connection.Read(ctx, fh, offset, int32(readSize))

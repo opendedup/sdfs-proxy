@@ -16,7 +16,8 @@ import (
 )
 
 func NewPortForward(configFilepath string, enableAuth, standalone bool, port string, debug bool, lpwd string, args []string, remoteTls bool, logPath string, cachesize, cachage int) error {
-
+	log.SetOutput(os.Stdout)
+	log.SetReportCaller(true)
 	args = append(args, "-s")
 	if runtime.GOOS != "windows" {
 		os.MkdirAll("/var/run/sdfs/", os.ModePerm)

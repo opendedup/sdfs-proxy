@@ -63,6 +63,8 @@ func (s *PortRedictor) WriteConfig() error {
 }
 
 func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRequest) (*spb.ReloadConfigResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	if s.portforwarder {
 		return s.pc.ReloadConfig(ctx, req)
 	}
@@ -109,6 +111,8 @@ func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRe
 }
 
 func (s *PortRedictor) localWriteConfig() error {
+	log.Debug("in")
+	defer log.Debug("out")
 	jsonFile, err := os.Open(s.config)
 	if err != nil {
 		return err
@@ -138,6 +142,8 @@ func (s *PortRedictor) localWriteConfig() error {
 }
 
 func (s *PortRedictor) localReadConfig() error {
+	log.Debug("in")
+	defer log.Debug("out")
 	jsonFile, err := os.Open(s.config)
 	if err != nil {
 		return err
@@ -183,6 +189,8 @@ func (s *PortRedictor) localReadConfig() error {
 }
 
 func (s *PortRedictor) GetProxyVolumes(ctx context.Context, req *spb.ProxyVolumeInfoRequest) (*spb.ProxyVolumeInfoResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
 	if s.portforwarder {
 		return s.pc.GetProxyVolumes(ctx, req)
 	}
@@ -206,6 +214,8 @@ func NewPortRedirector(config string, listenPort string, portforwarder bool, cln
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
+	log.SetOutput(os.Stdout)
+	log.SetReportCaller(true)
 	sc := &PortRedictor{config: config, listenPort: listenPort}
 	if portforwarder {
 		sc.portforwarder = true
