@@ -18,6 +18,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"net/http"
+	_ "net/http/pprof"
+
 	api "github.com/opendedup/sdfs-client-go/api"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	paip "github.com/opendedup/sdfs-proxy/api"
@@ -34,6 +37,7 @@ type containerConfig struct {
 	imagename, containername, hostPort, containerPort string
 	inputEnv, cmd                                     []string
 	copyFile                                          bool
+	attachProfiler                                    bool
 }
 
 type testRun struct {
@@ -100,6 +104,7 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			case "PROXY":
 				c.clientsidededupe = false
 				c.direct = false
+				c.volume = -1
 			}
 			trs := []*testRun{c}
 			if !c.direct {
@@ -210,7 +215,8 @@ func BenchmarkWrites(b *testing.B) {
 		name string
 		sz   int64
 	}
-	tests := []string{"AZURE", "S3", "BLOCK"}
+
+	tests := []string{"AZURE", "S3", "BLOCK", "ENCRYPTBLOCK"}
 	testTypes := []string{"PROXY", "PROXYDEDUPE", "DIRECTDEDUPE"}
 	uTest := []ut{{name: "0PercentUnique", pu: 0}, {name: "50PercentUnique", pu: 50}, {name: "100PercentUnique", pu: 100}}
 	sTest := []st{{name: "1GB", sz: int64(1) * gb}, {name: "10GB", sz: int64(10) * gb},
@@ -253,6 +259,15 @@ func BenchmarkWrites(b *testing.B) {
 					}
 					c.name = n
 					c.cloudVol = false
+				case "ENCRYPTBLOCK":
+					cfg := &containerConfig{attachProfiler: true, containername: "eblock-6442", hostPort: "6442", mountstorage: true, memory: 16 * gb, encrypt: true}
+					//c.cfg = cfg
+					c, err = CreateBlockSetup(ctx, cfg)
+					if err != nil {
+						b.Logf("error creating container %v", err)
+					}
+					c.name = n
+					c.cloudVol = false
 				case "S3":
 					cfg := &containerConfig{containername: "s3-6442", hostPort: "6442", mountstorage: true, cpu: 4}
 					//c.cfg = cfg
@@ -272,6 +287,7 @@ func BenchmarkWrites(b *testing.B) {
 				case "PROXY":
 					c.clientsidededupe = false
 					c.direct = false
+					c.volume = -1
 				}
 				trs := []*testRun{c}
 				if !c.direct {
@@ -404,6 +420,7 @@ func parallelBenchmarkWrite(b *testing.B, c *testRun, blockSize int, fileSize in
 					thh.offset += int64(len(thh.bt))
 					ct++
 					if ct > inv {
+						thh.bt = nil
 						thh.bt = randBytesMaskImpr(blockSz)
 					}
 					if ct == 100 {
@@ -481,6 +498,7 @@ func parallelBenchmarkRead(b *testing.B, c *testRun, blockSize int, fileSize int
 					thh.offset += int64(len(thh.bt))
 					ct++
 					if ct > inv {
+						thh.bt = nil
 						thh.bt = randBytesMaskImpr(blockSz)
 					}
 					if ct == 100 {
@@ -562,6 +580,16 @@ func TestMatrix(t *testing.T) {
 func testNewProxyConnection(t *testing.T, c *testRun) {
 	t.Logf("Creating connection for %d\n", c.volume)
 	c.connection = dconnect(t, c)
+	ct := 0
+	for c.connection == nil {
+		time.Sleep(15 * time.Second)
+		c.connection = dconnect(t, c)
+		ct++
+		if ct > 5 {
+			break
+		}
+
+	}
 	assert.NotNil(t, c.connection)
 
 }
@@ -797,9 +825,11 @@ func testTuncate(t *testing.T, c *testRun) {
 func testWriteLargeBlock(t *testing.T, c *testRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tMb := int64(1024 * 1024 * 10)
+	tMb := int64(1024 * 1024 * 100)
 	fMb := 1024 * 5
 	fn, _ := makeLargeBlockFile(ctx, t, c, "", tMb, fMb)
+	info, _ := c.connection.Stat(ctx, fn)
+	t.Logf("afd %d vfd %d", info.IoMonitor.ActualBytesWritten, info.IoMonitor.VirtualBytesWritten)
 	err := c.connection.DeleteFile(ctx, fn)
 	assert.Nil(t, err)
 }
@@ -1501,7 +1531,9 @@ func startProxyVolume(tr []*testRun) {
 }
 
 func TestMain(m *testing.M) {
-
+	go func() {
+		log.Println(http.ListenAndServe(":8081", nil))
+	}()
 	rand.Seed(time.Now().UTC().UnixNano())
 	code := m.Run()
 	fmt.Printf("Testing Return code is %d\n", code)

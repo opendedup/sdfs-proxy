@@ -84,7 +84,7 @@ func makeLargeBlockGenericFile(ctx context.Context, t *testing.T, connection *ap
 
 		err = connection.Write(ctx, fh, b, offset, int32(len(b)))
 		h.Write(b)
-		t.Logf("Wrote blocksize %d", len(b))
+		//t.Logf("Wrote blocksize %d", len(b))
 		assert.Nil(t, err)
 		offset += int64(len(b))
 		b = nil

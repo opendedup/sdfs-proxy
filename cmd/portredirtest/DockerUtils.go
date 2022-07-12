@@ -131,8 +131,23 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 			Config: map[string]string{},
 		},
 	}
+	if cfg.attachProfiler {
+		profilingPort, err := natting.NewPort("tcp", "8849")
+		if err != nil {
+			fmt.Println("Unable to create docker port")
+			return "", err
+		}
+
+		hostConfig.PortBindings[profilingPort] = []natting.PortBinding{
+			{
+				HostIP:   "0.0.0.0",
+				HostPort: "8849",
+			},
+		}
+	}
 	if cfg.memory > 0 {
 		hostConfig.Resources.Memory = cfg.memory
+		hostConfig.Resources.MemorySwap = cfg.memory
 	}
 	if cfg.cpu > 0 {
 		hostConfig.Resources.NanoCPUs = cfg.cpu * 1000000000
@@ -141,8 +156,8 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 		hostConfig.Mounts = []mount.Mount{
 			{
 				Type:   mount.TypeBind,
-				Source: "/opt/sdfs",
-				Target: "/opt/sdfs",
+				Source: "/opt/",
+				Target: "/opt/",
 			},
 		}
 	}
@@ -345,6 +360,9 @@ func CreateS3Setup(ctx context.Context, cfg *containerConfig) (*testRun, error) 
 func CreateBlockSetup(ctx context.Context, cfg *containerConfig) (*testRun, error) {
 	cfg.inputEnv = []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "1TB")}
 	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
+	if cfg.attachProfiler {
+		cfg.inputEnv = append(cfg.inputEnv, "JAVA_EXT_CMD=-agentpath:/opt/jprofiler13/bin/linux-x64/libjprofilerti.so=port=8849,nowait")
+	}
 	if cfg.encrypt {
 		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --chunk-store-encrypt=true")
 	} else {
