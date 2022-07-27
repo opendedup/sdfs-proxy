@@ -184,6 +184,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			t.Run("testSetVolumeSize", func(t *testing.T) {
 				testSetVolumeSize(t, c)
 			})
+			t.Run("testCompression", func(t *testing.T) {
+				testCompression(t, c)
+			})
 			if c.cloudVol {
 				t.Run("testSetRWSpeed", func(t *testing.T) {
 					testSetRWSpeed(t, c)
@@ -592,6 +595,22 @@ func testNewProxyConnection(t *testing.T, c *testRun) {
 	}
 	assert.NotNil(t, c.connection)
 
+}
+
+func testCompression(t *testing.T, c *testRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	uf := "resources/testdata.tar"
+	fi, err := os.Stat(uf)
+	assert.Nil(t, err)
+	fn := string(randBytesMaskImpr(16))
+	_, err = c.connection.Upload(ctx, uf, fn, 1024)
+	assert.Nil(t, err)
+	info, _ := c.connection.Stat(ctx, fn)
+	t.Logf("afd %d vfd %d fsz %d", info.IoMonitor.ActualBytesWritten, info.IoMonitor.VirtualBytesWritten, fi.Size())
+	assert.Less(t, info.IoMonitor.ActualBytesWritten, fi.Size())
+	err = c.connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
 }
 
 func testChow(t *testing.T, c *testRun) {
@@ -1659,7 +1678,7 @@ func dconnect(t *testing.T, c *testRun) *api.SdfsConnection {
 
 	connection, err := api.NewConnection(address, c.clientsidededupe, true, vid, 40000, 60)
 	if err != nil {
-		t.Errorf("Unable to connect to %s error: %v\n", address, err)
+		t.Logf("Unable to connect to %s error: %v\n", address, err)
 		return nil
 	}
 	t.Logf("Connection state %s", connection.Clnt.GetState())
