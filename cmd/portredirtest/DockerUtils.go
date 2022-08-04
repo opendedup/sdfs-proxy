@@ -94,6 +94,7 @@ func copyToContainer(ctx context.Context, container, srcPath, dstPath string) (e
 }
 
 func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
+	log.Infof(" config is %v", cfg)
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		log.Fatal(err)
@@ -336,6 +337,7 @@ func CreateS3Setup(ctx context.Context, cfg *containerConfig) (*testRun, error) 
 	}
 	s3bucket := string(randBytesMaskImpr(16))
 	cfg.imagename = sdfsimagename
+	cfg.containerPort = "6442"
 
 	cfg.inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
 		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", s3bucket),

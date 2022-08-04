@@ -2,7 +2,7 @@ module github.com/opendedup/sdfs-proxy
 
 go 1.18
 
-//replace github.com/opendedup/sdfs-client-go => /home/samsilverberg/git/sdfs-client-go
+replace github.com/opendedup/sdfs-client-go => /home/samsilverberg/git/sdfs-client-go
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.15.0
@@ -10,7 +10,7 @@ require (
 	github.com/docker/cli v20.10.17+incompatible
 	github.com/docker/docker v20.10.17+incompatible
 	github.com/docker/go-connections v0.4.0
-	github.com/opendedup/sdfs-client-go v0.1.37-0.20220712210825-b00987bdecb6
+	github.com/opendedup/sdfs-client-go v0.1.37-0.20220801155919-d41af0c3d664
 	github.com/sevlyar/go-daemon v0.1.5
 	github.com/shirou/gopsutil/v3 v3.22.1
 	github.com/sirupsen/logrus v1.8.1

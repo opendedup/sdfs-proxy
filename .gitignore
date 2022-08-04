@@ -18,3 +18,4 @@ cmd/portredirtest/testpf.json
 test.sh
 benchoutput.txt
 bench.sh
+build/sdfs-proxy

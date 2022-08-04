@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"os/exec"
 	"reflect"
 	"runtime"
+	"runtime/pprof"
 	"sync"
 
 	"fmt"
@@ -91,6 +93,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 				cfg := &containerConfig{containername: "s3-6442", hostPort: "6442"}
 				//c.cfg = cfg
 				c, err = CreateS3Setup(ctx, cfg)
+				if err != nil {
+					t.Logf("Error %v", err)
+				}
 				c.name = n
 				c.cloudVol = true
 				assert.Nil(t, err)
@@ -204,6 +209,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			}
 
 			StopAndRemoveContainer(ctx, c.cfg.containername)
+			if name == "S3" {
+				StopAndRemoveContainer(ctx, "minio")
+			}
 		})
 
 	}
@@ -370,6 +378,9 @@ func BenchmarkWrites(b *testing.B) {
 				}
 
 				StopAndRemoveContainer(ctx, c.cfg.containername)
+				if name == "S3" {
+					StopAndRemoveContainer(ctx, "minio")
+				}
 			})
 		}
 	}
@@ -1549,10 +1560,39 @@ func startProxyVolume(tr []*testRun) {
 
 }
 
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
+
 func TestMain(m *testing.M) {
 	go func() {
 		log.Println(http.ListenAndServe(":8081", nil))
 	}()
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	// ... rest of the program ...
+
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		runtime.GC()    // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+	}
 	rand.Seed(time.Now().UTC().UnixNano())
 	code := m.Run()
 	fmt.Printf("Testing Return code is %d\n", code)
