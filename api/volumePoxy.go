@@ -272,6 +272,24 @@ func (s *VolumeProxy) SyncFromCloudVolume(ctx context.Context, req *spb.SyncFrom
 	}
 
 }
+
+func (s *VolumeProxy) ReconcileCloudMetadata(ctx context.Context, req *spb.ReconcileCloudMetadataRequest) (*spb.ReconcileCloudMetadataResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dvc
+	}
+	if val, ok := s.vc[volid]; ok {
+		return val.ReconcileCloudMetadata(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
+
+}
+
 func (s *VolumeProxy) SyncCloudVolume(ctx context.Context, req *spb.SyncVolRequest) (*spb.SyncVolResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")

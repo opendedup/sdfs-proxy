@@ -165,7 +165,7 @@ func (s *PortRedictor) localReadConfig() error {
 			Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, fe.CompressData, -1, fe.CacheSize, fe.CacheAge)
 
 			if err == nil {
-				log.Infof("added %d", Connection.Volumeid)
+				log.Debugf("added %d", Connection.Volumeid)
 				cmp[Connection.Volumeid] = Connection.Clnt
 				dd[Connection.Volumeid] = fe
 				break

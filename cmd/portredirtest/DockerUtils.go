@@ -94,7 +94,7 @@ func copyToContainer(ctx context.Context, container, srcPath, dstPath string) (e
 }
 
 func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
-	log.Infof(" config is %v", cfg)
+	log.Debugf(" config is %v", cfg)
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		log.Fatal(err)
@@ -205,7 +205,7 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 	val, present := os.LookupEnv("SDFS_COPY_FILE_TO")
 	if present && cfg.copyFile {
 		s := strings.Split(val, ":")
-		log.Infof("copy data %s to %s:%s", s[0], cfg.containername, s[1])
+		log.Debugf("copy data %s to %s:%s", s[0], cfg.containername, s[1])
 		err = copyToContainer(ctx, cfg.containername, s[0], s[1])
 		if err != nil {
 			log.Error(err)
@@ -219,8 +219,7 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 		log.Println(err)
 		return "", err
 	}
-
-	log.Printf("Container %s is created", cont.ID)
+	log.Debugf("Container %s is created", cont.ID)
 	go func() {
 		reader, err := client.ContainerLogs(context.Background(), cont.ID, types.ContainerLogsOptions{
 			ShowStdout: true,
@@ -262,7 +261,7 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 				}
 			}
 		}
-		log.Infof("exiting reader for %s", fn)
+		log.Debugf("exiting reader for %s", fn)
 	}()
 
 	if err != nil {
@@ -335,7 +334,7 @@ func CreateS3Setup(ctx context.Context, cfg *containerConfig) (*testRun, error) 
 	if err != nil {
 		return nil, err
 	}
-	s3bucket := string(randBytesMaskImpr(16))
+	s3bucket := "pool0"
 	cfg.imagename = sdfsimagename
 	cfg.containerPort = "6442"
 
@@ -391,9 +390,9 @@ func StopAndRemoveContainer(ctx context.Context, containername string) error {
 	client.NegotiateAPIVersion(ctx)
 
 	defer client.Close()
-	log.Printf("Stopping container %s", containername)
+	log.Debugf("Stopping container %s", containername)
 	if err := client.ContainerStop(ctx, containername, nil); err != nil {
-		log.Printf("Unable to stop container %s: %s", containername, err)
+		log.Debugf("Unable to stop container %s: %s", containername, err)
 	}
 
 	removeOptions := types.ContainerRemoveOptions{
@@ -402,7 +401,7 @@ func StopAndRemoveContainer(ctx context.Context, containername string) error {
 	}
 
 	if err := client.ContainerRemove(ctx, containername, removeOptions); err != nil {
-		log.Printf("Unable to remove container: %s", err)
+		log.Debugf("Unable to remove container: %s", err)
 		return err
 	}
 
