@@ -1,0 +1,330 @@
+make all --print-data-base --no-builtin-variables --no-builtin-rules --question
+# GNU Make 4.3
+# Built for x86_64-pc-linux-gnu
+# Copyright (C) 1988-2020 Free Software Foundation, Inc.
+# License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+# This is free software: you are free to change and redistribute it.
+# There is NO WARRANTY, to the extent permitted by law.
+ 
+
+# Make data base, printed on Sat Aug 13 16:00:30 2022
+
+# Variables
+
+# environment
+PROVIDE_FULLSTACK_ACTION = true
+# environment
+JAVA_HOME = /usr/lib/jvm/java-17-openjdk-amd64
+# environment
+LC_ALL = C
+# environment
+UUID = d9e015ed-e179-43fa-bb5c-800dda772ae2
+# makefile (from 'Makefile', line 5)
+GOOS := linux
+# environment
+VSCODE_CWD = /home/samsilverberg
+# default
+MAKE_COMMAND := make
+# environment
+VSCODE_HANDLES_SIGPIPE = true
+# environment
+THREE_SCALE_USER_TOKEN = 207c527cfc2a6b8dcf4fa43ad7a976da
+# makefile (from 'Makefile', line 2)
+GOPATH := /home/samsilverberg/go
+# automatic
+@D = $(patsubst %/,%,$(dir $@))
+# environment
+VSCODE_HANDLES_UNCAUGHT_ERRORS = true
+# default
+.VARIABLES := 
+# makefile (from 'Makefile', line 1)
+PWD := /home/samsilverberg/git/sdfs-proxy
+# automatic
+%D = $(patsubst %/,%,$(dir $%))
+# environment
+XDG_DATA_DIRS = /usr/local/share:/usr/share:/var/lib/snapd/desktop
+# automatic
+^D = $(patsubst %/,%,$(dir $^))
+# automatic
+%F = $(notdir $%)
+# environment
+CONDA_PROMPT_MODIFIER = (base) 
+# environment
+LANG = C
+# default
+.LOADED := 
+# default
+.INCLUDE_DIRS = /usr/local/include /usr/include /usr/include
+# makefile
+MAKEFLAGS = pqrR
+# makefile
+CURDIR := /home/samsilverberg/git/sdfs-proxy
+# environment
+UTM_SOURCE = vscode
+# environment
+APPLICATION_INSIGHTS_NO_DIAGNOSTIC_CHANNEL = true
+# automatic
+*D = $(patsubst %/,%,$(dir $*))
+# makefile (from 'Makefile', line 7)
+VERSION = $(shell git describe --tags)
+# environment
+MFLAGS = -pqrR
+# default
+.SHELLFLAGS := -c
+# automatic
++D = $(patsubst %/,%,$(dir $+))
+# makefile (from 'Makefile', line 1)
+MAKEFILE_LIST := Makefile
+# environment
+CONDA_SHLVL = 1
+# automatic
+@F = $(notdir $@)
+# makefile (from 'Makefile', line 8)
+BRANCH := dp3
+# environment
+XDG_SESSION_TYPE = tty
+# automatic
+?D = $(patsubst %/,%,$(dir $?))
+# makefile (from 'Makefile', line 10)
+TAG = "sdfs/sdfs-proxy:$(VERSION)"
+# automatic
+*F = $(notdir $*)
+# environment
+DBUS_SESSION_BUS_ADDRESS = unix:path=/run/user/1000/bus
+# automatic
+<D = $(patsubst %/,%,$(dir $<))
+# environment
+VSCODE_NLS_CONFIG = {"locale":"en","availableLanguages":{}}
+# default
+MAKE_HOST := x86_64-pc-linux-gnu
+# environment
+CONDA_PREFIX = /home/samsilverberg/anaconda3
+# makefile
+SHELL = /bin/sh
+# default
+MAKECMDGOALS := all
+# environment
+SHLVL = 1
+# environment
+MAKELEVEL := 0
+# default
+MAKE = $(MAKE_COMMAND)
+# environment
+PATH = /home/samsilverberg/.vscode-server/bin/6d9b74a70ca9c7733b29f0456fd8195364076dda/bin/remote-cli:/home/samsilverberg/anaconda3/bin:/home/samsilverberg/anaconda3/condabin:/opt/maven/bin:/usr/local/bin:/usr/bin:/bin:/usr/local/games:/usr/games:/usr/local/go/bin:/snap/bin:/home/samsilverberg/go/bin
+# default
+MAKEFILES := 
+# environment
+MOTD_SHOWN = pam
+# automatic
+^F = $(notdir $^)
+# environment
+SSH_CLIENT = 168.103.226.49 48184 22
+# environment
+RECOMMENDER_API_URL = https://gw.api.openshift.io//api/v2
+# automatic
+?F = $(notdir $?)
+# environment
+LS_COLORS = 
+# automatic
++F = $(notdir $+)
+# 'override' directive
+GNUMAKEFLAGS := 
+# environment
+BROWSER = /home/samsilverberg/.vscode-server/bin/6d9b74a70ca9c7733b29f0456fd8195364076dda/bin/helpers/browser.sh
+# environment
+CONDA_DEFAULT_ENV = base
+# environment
+LOGNAME = samsilverberg
+# makefile
+.DEFAULT_GOAL := all
+# environment
+USER = samsilverberg
+# default
+MAKE_VERSION := 4.3
+# 'override' directive
+.SHELLSTATUS := 0
+# makefile (from 'Makefile', line 4)
+GOARCH := amd64
+# environment
+VSCODE_AGENT_FOLDER = /home/samsilverberg/.vscode-server
+# environment
+_ = /home/samsilverberg/.vscode-server/bin/6d9b74a70ca9c7733b29f0456fd8195364076dda/node
+# environment
+XDG_RUNTIME_DIR = /run/user/1000
+# makefile (from 'Makefile', line 9)
+HASH := 4158d027004c9f1626553c4ecafffd84f37fb302
+# environment
+_CE_M = 
+# environment
+VSCODE_IPC_HOOK_CLI = /run/user/1000/vscode-ipc-03fc63d2-9495-4544-b79b-aba9da51081d.sock
+# environment
+M2_HOME = /opt/maven
+# environment
+GOMODCACHE = /home/samsilverberg/go/pkg/mod
+# environment
+GOLANG_EXECUTABLE = /usr/local/bin/go
+# environment
+XDG_SESSION_CLASS = user
+# environment
+VSCODE_AMD_ENTRYPOINT = vs/workbench/api/node/extensionHostProcess
+# environment
+HOME = /home/samsilverberg
+# environment
+ELECTRON_RUN_AS_NODE = 1
+# environment
+XDG_SESSION_ID = 280
+# environment
+GOPROXY = https://proxy.golang.org,direct
+# default
+.RECIPEPREFIX := 
+# automatic
+<F = $(notdir $<)
+# default
+SUFFIXES := 
+# environment
+TELEMETRY_ID = 80403117-13d0-45fa-aaad-df9ec2fa78e5
+# default
+ 
+.FEATURES := target-specific order-only second-expansion else-if shortest-stem undefine oneshell nocomment grouped-target extra-prereqs archives jobserver output-sync check-symlink load
+# environment
+CONDA_EXE = /home/samsilverberg/anaconda3/bin/conda
+# environment
+_CE_CONDA = 
+# environment
+SSH_CONNECTION = 168.103.226.49 48184 10.128.0.36 22
+# variable set hash-table stats:
+# Load=90/1024=9%, Rehash=0, Collisions=2/147=1%
+
+# Pattern-specific Variable Values
+
+# No pattern-specific variable values.
+
+# Directories
+
+# . (device 2049, inode 1442902): 44 files, no impossibilities.
+
+# 44 files, no impossibilities in 1 directories.
+
+# Implicit Rules
+
+# No implicit rules.
+
+# Files
+
+lint:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 33):
+	@echo "Running $@ check"
+	@GO111MODULE=on ${GOPATH}/bin/golangci-lint cache clean
+	@GO111MODULE=on ${GOPATH}/bin/golangci-lint run --timeout=5m --config ./.golangci.yml
+
+checks:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 15):
+	@echo "Checking dependencies"
+	@(env bash $(PWD)/buildscripts/checkdeps.sh)
+
+getdeps:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 19):
+	@mkdir -p ${GOPATH}/bin
+	@which golangci-lint 1>/dev/null || (echo "Installing golangci-lint" && curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOPATH)/bin v1.27.0)
+
+# Not a target:
+Makefile:
+#  Implicit rule search has been done.
+#  Last modified 2022-06-28 21:57:02.872481384
+#  File has been updated.
+#  Successfully updated.
+
+clean:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 53):
+	@echo "Cleaning up all the generated files"
+	@find . -name '*.test' | xargs rm -fv
+	@find . -name '*~' | xargs rm -fv
+	@rm -rvf sdfs-proxy
+	@rm -rvf build
+	@rm -rvf release
+	@rm -rvf .verify*
+
+fmt:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 28):
+	@echo "Running $@ check"
+	@GO111MODULE=on gofmt -d cmd/
+	@GO111MODULE=on gofmt -d pkg/
+
+# Not a target:
+.DEFAULT:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+all: build
+#  Command line target.
+#  Implicit rule search has been done.
+#  File does not exist.
+#  File has been updated.
+#  Successfully updated.
+
+build:
+#  Implicit rule search has not been done.
+#  Last modified 2022-07-27 05:47:11.53699348
+#  File has been updated.
+#  Successfully updated.
+#  recipe to execute (from 'Makefile', line 41):
+	@mkdir -p $(PWD)/build
+	@echo "Building sdfs-proxy binary to '$(PWD)/build/sdfs-proxy'"
+	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfs-proxy cmd/server/*
+	@env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfs-proxy.exe cmd/server/*
+
+verifiers: getdeps fmt lint
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+
+install: build
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 48):
+	@echo "Installing sdfs-proxy binary to '$(GOPATH)/bin/sdfs-proxy'"
+	@mkdir -p $(GOPATH)/bin && cp -f $(PWD)/build/sdfs-proxy $(GOPATH)/bin/sdfs-proxy
+	@echo "Installation successful. To learn more, try \"sdfs-proxy\"."
+
+crosscompile:
+#  Implicit rule search has not been done.
+#  Modification time never checked.
+#  File has not been updated.
+#  recipe to execute (from 'Makefile', line 23):
+	@(env bash $(PWD)/buildscripts/cross-compile.sh)
+
+# files hash-table stats:
+# Load=13/1024=1%, Rehash=0, Collisions=0/32=0%
+# VPATH Search Paths
+
+# No 'vpath' search paths.
+
+# No general ('VPATH' variable) search path.
+
+# strcache buffers: 1 (0) / strings = 57 / storage = 978 B / avg = 17 B
+# current buf: size = 8162 B / used = 978 B / count = 57 / avg = 17 B
+
+ 
+# strcache performance: lookups = 78 / hit rate = 26%
+# hash-table stats:
+# Load=57/8192=1%, Rehash=0, Collisions=0/78=0%
+# Finished Make data base on Sat Aug 13 16:00:30 2022
+
+ 

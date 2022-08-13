@@ -1,0 +1,11 @@
+FROM golang:1.16-alpine
+LABEL email=sam.silverberg@gmail.com
+LABEL author="Sam Silverberg"
+
+ENV GOPATH /go
+ENV CGO_ENABLED 0
+ENV GO111MODULE on
+COPY ./ /go/sdfs-testing
+
+WORKDIR "/go/sdfs-testing/"
+RUN go mod tidy
