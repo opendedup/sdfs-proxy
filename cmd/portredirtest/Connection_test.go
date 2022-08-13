@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"runtime"
 	"runtime/pprof"
+	"strings"
 	"sync"
 
 	"fmt"
@@ -212,6 +213,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 				t.Run("testReconcileCloudMetadata", func(t *testing.T) {
 					testReconcileCloudMetadata(t, c)
 				})
+				t.Run("testCloudAutoDownload", func(t *testing.T) {
+					testCloudAutoDownload(t, c)
+				})
 			}
 			c.connection.CloseConnection(ctx)
 			if !c.direct {
@@ -242,7 +246,7 @@ func BenchmarkWrites(b *testing.B) {
 	uTest := []ut{{name: "0PercentUnique", pu: 0}, {name: "50PercentUnique", pu: 50}, {name: "100PercentUnique", pu: 100}}
 	sTest := []st{{name: "1GB", sz: int64(1) * gb}, {name: "10GB", sz: int64(10) * gb},
 		{name: "100GB", sz: int64(100) * gb}, {name: "900GB", sz: int64(900) * gb}}
-	tTest := []int{1, 2, 4, 8}
+	tTest := []int{1, 2, 4, 8, 16}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for _, testType := range testTypes {
@@ -263,7 +267,7 @@ func BenchmarkWrites(b *testing.B) {
 				}
 				switch n := name; n {
 				case "AZURE":
-					cfg := &containerConfig{containername: "azure-6442", hostPort: "6442", mountstorage: true, memory: 24 * gb}
+					cfg := &containerConfig{containername: "azure-6442", hostPort: "6442", mountstorage: true}
 					//c.cfg = cfg
 					c, err = CreateAzureSetup(ctx, cfg)
 					if err != nil {
@@ -281,7 +285,7 @@ func BenchmarkWrites(b *testing.B) {
 					c.name = n
 					c.cloudVol = false
 				case "EB":
-					cfg := &containerConfig{attachProfiler: true, containername: "eblock-6442", hostPort: "6442", mountstorage: true, memory: 24 * gb, encrypt: true}
+					cfg := &containerConfig{attachProfiler: true, containername: "eblock-6442", hostPort: "6442", mountstorage: true, encrypt: true}
 					//c.cfg = cfg
 					c, err = CreateBlockSetup(ctx, cfg)
 					if err != nil {
@@ -290,7 +294,7 @@ func BenchmarkWrites(b *testing.B) {
 					c.name = n
 					c.cloudVol = false
 				case "S3":
-					cfg := &containerConfig{containername: "s3-6442", hostPort: "6442", mountstorage: true, cpu: 4}
+					cfg := &containerConfig{containername: "s3-6442", hostPort: "6442", mountstorage: true}
 					//c.cfg = cfg
 					c, err = CreateS3Setup(ctx, cfg)
 					if err != nil {
@@ -335,26 +339,26 @@ func BenchmarkWrites(b *testing.B) {
 								for _, tt := range tTest {
 									b.Run(fmt.Sprintf("WriteThreads%d", tt), func(b *testing.B) {
 										//parallel write
-										b.Run("parallelBenchmarkWrite32", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 32, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload32", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 32, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite64", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 64, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload64", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 64, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite128", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 128, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload128", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 128, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite256", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 256, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload256", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 256, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite512", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 512, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload512", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 512, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite1024", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 1024, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload1024", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 1024, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite2048", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 2048, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload2048", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 2048, st.sz, pu.pu, tt)
 										})
 										b.Run("parallelBenchmarkUpload1024", func(b *testing.B) {
 											parallelBenchmarkUpload(b, c, 1024, st.sz, pu.pu, tt)
@@ -475,6 +479,7 @@ func parallelBenchmarkUpload(b *testing.B, c *testRun, blockSize int, fileSize i
 
 }
 
+/*
 func parallelBenchmarkWrite(b *testing.B, c *testRun, blockSize int, fileSize int64, percentUnique, threads int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -546,7 +551,7 @@ func parallelBenchmarkWrite(b *testing.B, c *testRun, blockSize int, fileSize in
 	}
 
 }
-
+*/
 func parallelBenchmarkRead(b *testing.B, c *testRun, blockSize int, fileSize int64, percentUnique, threads int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1377,6 +1382,71 @@ func testUpload(t *testing.T, c *testRun) {
 	os.Remove(nfn)
 	os.Remove(fn)
 	c.connection.DeleteFile(ctx, fn)
+}
+
+func testCloudAutoDownload(t *testing.T, c *testRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fsz := int64(1024 * 1024 * 10)
+	fn, hs := makeFile(ctx, t, c, "", fsz)
+	cmd := "chattr -i /opt/sdfs/volumes/.pool0/files/" + fn
+	cr, err := DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	//t.Logf("chattr cmd output %s", cr.outBuffer.String())
+	//t.Logf("chattr err cmd output %s", cr.errBuffer.String())
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	cmd = "rm /opt/sdfs/volumes/.pool0/files/" + fn
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	//t.Logf("rm cmd output %s", cr.outBuffer.String())
+	//t.Logf("rm err cmd output %s", cr.errBuffer.String())
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	chs, err := readFile(ctx, t, c, fn, true)
+	assert.Nil(t, err)
+	assert.Equal(t, chs, hs)
+	fn, hs = makeFile(ctx, t, c, "", fsz)
+	fi, err := c.connection.Stat(ctx, fn)
+	assert.Nil(t, err)
+	ddbpth := fmt.Sprintf("%s/%s/", fi.MapGuid[:2], fi.MapGuid)
+	cmd = "rm -rf /opt/sdfs/volumes/.pool0/ddb/" + ddbpth
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	//t.Logf("rm cmd output %s", cr.outBuffer.String())
+	//t.Logf("rm err cmd output %s", cr.errBuffer.String())
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	cmd = "ls -lah /opt/sdfs/volumes/.pool0/ddb/" + ddbpth
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	//t.Logf("rm cmd output %s", cr.outBuffer.String())
+	//t.Logf("rm err cmd output %s", cr.errBuffer.String())
+	assert.Nil(t, err)
+	assert.Equal(t, 2, cr.ExitCode)
+	chs, err = readFile(ctx, t, c, fn, true)
+	assert.Nil(t, err)
+	assert.Equal(t, chs, hs)
+	fn, hs = makeFile(ctx, t, c, "", fsz)
+	fi, err = c.connection.Stat(ctx, fn)
+	assert.Nil(t, err)
+	ddbpth = fmt.Sprintf("%s/%s/", fi.MapGuid[:2], fi.MapGuid)
+	cmd = "rm -rf /opt/sdfs/volumes/.pool0/ddb/" + ddbpth
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	cmd = "ls -lah /opt/sdfs/volumes/.pool0/ddb/" + ddbpth
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	assert.Nil(t, err)
+	assert.Equal(t, 2, cr.ExitCode)
+	cmd = "chattr -i /opt/sdfs/volumes/.pool0/files/" + fn
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	cmd = "rm /opt/sdfs/volumes/.pool0/files/" + fn
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	chs, err = readFile(ctx, t, c, fn, true)
+	assert.Nil(t, err)
+	assert.Equal(t, chs, hs)
+
 }
 
 func testCloudSync(t *testing.T, c *testRun) {

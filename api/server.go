@@ -110,7 +110,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 			os.Exit(-11)
 		}
 	}
-	maxMsgSize := 2097152 * 40
+	maxMsgSize := 240 * 1024 * 1024 //240 MB
 	if ServerTls || ServerMtls {
 		cc, err := LoadKeyPair(ServerMtls, AnyCert, remoteServerCert)
 		if err != nil {

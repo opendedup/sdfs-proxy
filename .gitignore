@@ -17,5 +17,6 @@ cmd/portredirtest/logs/*.log
 cmd/portredirtest/testpf.json
 test.sh
 benchoutput.txt
+benchmark.txt*
 bench.sh
 build/sdfs-proxy
