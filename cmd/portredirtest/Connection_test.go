@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"os/exec"
 	"reflect"
 	"runtime"
+	"runtime/pprof"
+	"strings"
 	"sync"
 
 	"fmt"
@@ -16,7 +19,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	log "github.com/sirupsen/logrus"
+
+	"net/http"
+	_ "net/http/pprof"
 
 	api "github.com/opendedup/sdfs-client-go/api"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
@@ -34,6 +42,7 @@ type containerConfig struct {
 	imagename, containername, hostPort, containerPort string
 	inputEnv, cmd                                     []string
 	copyFile                                          bool
+	attachProfiler                                    bool
 }
 
 type testRun struct {
@@ -43,6 +52,7 @@ type testRun struct {
 	url              string
 	connection       *api.SdfsConnection
 	cloudVol         bool
+	s3               bool
 	fe               *paip.ForwardEntry
 	direct           bool
 	cfg              *containerConfig
@@ -87,8 +97,12 @@ func runMatix(t *testing.T, testType string, tests []string) {
 				cfg := &containerConfig{containername: "s3-6442", hostPort: "6442"}
 				//c.cfg = cfg
 				c, err = CreateS3Setup(ctx, cfg)
+				if err != nil {
+					t.Logf("Error %v", err)
+				}
 				c.name = n
 				c.cloudVol = true
+				c.s3 = true
 				assert.Nil(t, err)
 			}
 			switch z := testType; z {
@@ -100,6 +114,10 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			case "PROXY":
 				c.clientsidededupe = false
 				c.direct = false
+				c.volume = -1
+			case "NATIVE":
+				c.clientsidededupe = false
+				c.direct = true
 			}
 			trs := []*testRun{c}
 			if !c.direct {
@@ -179,6 +197,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			t.Run("testSetVolumeSize", func(t *testing.T) {
 				testSetVolumeSize(t, c)
 			})
+			t.Run("testCompression", func(t *testing.T) {
+				testCompression(t, c)
+			})
 			if c.cloudVol {
 				t.Run("testSetRWSpeed", func(t *testing.T) {
 					testSetRWSpeed(t, c)
@@ -189,6 +210,12 @@ func runMatix(t *testing.T, testType string, tests []string) {
 				t.Run("testCloudSync", func(t *testing.T) {
 					testCloudSync(t, c)
 				})
+				t.Run("testReconcileCloudMetadata", func(t *testing.T) {
+					testReconcileCloudMetadata(t, c)
+				})
+				t.Run("testCloudAutoDownload", func(t *testing.T) {
+					testCloudAutoDownload(t, c)
+				})
 			}
 			c.connection.CloseConnection(ctx)
 			if !c.direct {
@@ -196,6 +223,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			}
 
 			StopAndRemoveContainer(ctx, c.cfg.containername)
+			if name == "S3" {
+				StopAndRemoveContainer(ctx, "minio")
+			}
 		})
 
 	}
@@ -210,12 +240,13 @@ func BenchmarkWrites(b *testing.B) {
 		name string
 		sz   int64
 	}
-	tests := []string{"AZURE", "S3", "BLOCK"}
-	testTypes := []string{"PROXY", "PROXYDEDUPE", "DIRECTDEDUPE"}
+
+	tests := []string{"AZURE", "S3", "BLOCK", "EB"}
+	testTypes := []string{"PROXY", "PROXYDEDUPE", "DIRECTDEDUPE", "NATIVE"}
 	uTest := []ut{{name: "0PercentUnique", pu: 0}, {name: "50PercentUnique", pu: 50}, {name: "100PercentUnique", pu: 100}}
 	sTest := []st{{name: "1GB", sz: int64(1) * gb}, {name: "10GB", sz: int64(10) * gb},
 		{name: "100GB", sz: int64(100) * gb}, {name: "900GB", sz: int64(900) * gb}}
-	tTest := []int{1, 2, 4, 8}
+	tTest := []int{1, 2, 4, 8, 16}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for _, testType := range testTypes {
@@ -236,11 +267,11 @@ func BenchmarkWrites(b *testing.B) {
 				}
 				switch n := name; n {
 				case "AZURE":
-					cfg := &containerConfig{containername: "azure-6442", hostPort: "6442", mountstorage: true, cpu: 4}
+					cfg := &containerConfig{containername: "azure-6442", hostPort: "6442", mountstorage: true}
 					//c.cfg = cfg
 					c, err = CreateAzureSetup(ctx, cfg)
 					if err != nil {
-						b.Logf("error creating container %v", err)
+						b.Errorf("error creating container %v", err)
 					}
 					c.name = n
 					c.cloudVol = true
@@ -249,17 +280,27 @@ func BenchmarkWrites(b *testing.B) {
 					//c.cfg = cfg
 					c, err = CreateBlockSetup(ctx, cfg)
 					if err != nil {
-						b.Logf("error creating container %v", err)
+						b.Errorf("error creating container %v", err)
+					}
+					c.name = n
+					c.cloudVol = false
+				case "EB":
+					cfg := &containerConfig{attachProfiler: true, containername: "eblock-6442", hostPort: "6442", mountstorage: true, encrypt: true}
+					//c.cfg = cfg
+					c, err = CreateBlockSetup(ctx, cfg)
+					if err != nil {
+						b.Errorf("error creating container %v", err)
 					}
 					c.name = n
 					c.cloudVol = false
 				case "S3":
-					cfg := &containerConfig{containername: "s3-6442", hostPort: "6442", mountstorage: true, cpu: 4}
+					cfg := &containerConfig{containername: "s3-6442", hostPort: "6442", mountstorage: true}
 					//c.cfg = cfg
 					c, err = CreateS3Setup(ctx, cfg)
 					if err != nil {
-						b.Logf("error creating container %v", err)
+						b.Errorf("error creating container %v", err)
 					}
+					c.s3 = true
 					c.name = n
 					c.cloudVol = true
 				}
@@ -272,12 +313,25 @@ func BenchmarkWrites(b *testing.B) {
 				case "PROXY":
 					c.clientsidededupe = false
 					c.direct = false
+					c.volume = -1
+				case "NATIVE":
+					c.clientsidededupe = false
+					c.direct = true
 				}
 				trs := []*testRun{c}
 				if !c.direct {
 					startProxyVolume(trs)
 				}
 				c.connection = benchmarkConnect(b, c)
+				cc := 0
+				for c.connection == nil {
+					time.Sleep(15 * time.Second)
+					c.connection = benchmarkConnect(b, c)
+					cc++
+					if cc > 5 {
+						b.Errorf("unable to connect to volume")
+					}
+				}
 				for _, pu := range uTest {
 					b.Run(pu.name, func(b *testing.B) {
 						for _, st := range sTest {
@@ -285,26 +339,29 @@ func BenchmarkWrites(b *testing.B) {
 								for _, tt := range tTest {
 									b.Run(fmt.Sprintf("WriteThreads%d", tt), func(b *testing.B) {
 										//parallel write
-										b.Run("parallelBenchmarkWrite32", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 32, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload32", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 32, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite64", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 64, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload64", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 64, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite128", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 128, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload128", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 128, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite256", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 256, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload256", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 256, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite512", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 512, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload512", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 512, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite1024", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 1024, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload1024", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 1024, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkWrite2048", func(b *testing.B) {
-											parallelBenchmarkWrite(b, c, 2048, st.sz, pu.pu, tt)
+										b.Run("parallelBenchmarkUpload2048", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 2048, st.sz, pu.pu, tt)
+										})
+										b.Run("parallelBenchmarkUpload1024", func(b *testing.B) {
+											parallelBenchmarkUpload(b, c, 1024, st.sz, pu.pu, tt)
 										})
 									})
 									b.Run(fmt.Sprintf("ReadThreads%d", tt), func(b *testing.B) {
@@ -342,12 +399,87 @@ func BenchmarkWrites(b *testing.B) {
 				}
 
 				StopAndRemoveContainer(ctx, c.cfg.containername)
+				if name == "S3" {
+					StopAndRemoveContainer(ctx, "minio")
+				}
 			})
 		}
 	}
 
 }
 
+func parallelBenchmarkUpload(b *testing.B, c *testRun, blockSize int, fileSize int64, percentUnique, threads int) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	type th struct {
+		fn         string
+		bt         []byte
+		offset     int64
+		connection *api.SdfsConnection
+		f          *os.File
+	}
+	inv := 100 - percentUnique
+	blockSz := 1024 * 2048
+	for i := 0; i < b.N; i++ {
+		var ths []*th
+
+		for z := 0; z < threads; z++ {
+			fn := fmt.Sprintf("%s/%s", "/opt/sdfs/tst", string(randBytesMaskImpr(16)))
+			f, err := os.OpenFile(fn, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				b.Errorf("error while creating file %s  %v", fn, err)
+			}
+			defer f.Close()
+			bt := randBytesMaskImpr(blockSz)
+			connection := benchmarkConnect(b, c)
+			thh := &th{fn: fn, offset: int64(0), bt: bt, connection: connection, f: f}
+			ths = append(ths, thh)
+			if err != nil {
+				b.Errorf("error while creating hash file %s  %v", fn, err)
+			}
+			ct := 0
+			for thh.offset < fileSize {
+				_, err := thh.f.Write(thh.bt)
+				if err != nil {
+					b.Errorf("error writing data at %d  %v", thh.offset, err)
+					return
+				}
+				thh.offset += int64(len(thh.bt))
+				ct++
+				if ct > inv {
+					thh.bt = nil
+					thh.bt = randBytesMaskImpr(blockSz)
+				}
+				if ct == 100 {
+					ct = 0
+				}
+			}
+		}
+		b.StartTimer()
+		wg := &sync.WaitGroup{}
+		wg.Add(threads)
+		for z := 0; z < threads; z++ {
+			thh := ths[z]
+			go func() {
+				thh.connection.Upload(ctx, thh.fn, thh.fn, blockSize)
+				thh.connection.CloseConnection(ctx)
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+		b.StopTimer()
+		var sz int64
+		for z := 0; z < threads; z++ {
+			sz += ths[z].offset
+			c.connection.Unlink(ctx, ths[z].fn)
+			os.Remove(ths[z].fn)
+		}
+		b.SetBytes(sz)
+	}
+
+}
+
+/*
 func parallelBenchmarkWrite(b *testing.B, c *testRun, blockSize int, fileSize int64, percentUnique, threads int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -387,10 +519,15 @@ func parallelBenchmarkWrite(b *testing.B, c *testRun, blockSize int, fileSize in
 
 				ct := 0
 				for thh.offset < fileSize {
-					thh.connection.Write(ctx, thh.fh, thh.bt, thh.offset, int32(len(thh.bt)))
+					err := thh.connection.Write(ctx, thh.fh, thh.bt, thh.offset, int32(len(thh.bt)))
+					if err != nil {
+						b.Errorf("error writing data at %d  %v", thh.offset, err)
+						return
+					}
 					thh.offset += int64(len(thh.bt))
 					ct++
 					if ct > inv {
+						thh.bt = nil
 						thh.bt = randBytesMaskImpr(blockSz)
 					}
 					if ct == 100 {
@@ -414,7 +551,7 @@ func parallelBenchmarkWrite(b *testing.B, c *testRun, blockSize int, fileSize in
 	}
 
 }
-
+*/
 func parallelBenchmarkRead(b *testing.B, c *testRun, blockSize int, fileSize int64, percentUnique, threads int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -459,11 +596,16 @@ func parallelBenchmarkRead(b *testing.B, c *testRun, blockSize int, fileSize int
 				}
 				ct := 0
 				for thh.offset < fileSize {
-					thh.connection.Write(ctx, thh.fh, thh.bt, thh.offset, int32(len(thh.bt)))
+					err := thh.connection.Write(ctx, thh.fh, thh.bt, thh.offset, int32(len(thh.bt)))
+					if err != nil {
+						b.Errorf("error writing data at %d  %v", thh.offset, err)
+						return
+					}
 					h.Write(thh.bt)
 					thh.offset += int64(len(thh.bt))
 					ct++
 					if ct > inv {
+						thh.bt = nil
 						thh.bt = randBytesMaskImpr(blockSz)
 					}
 					if ct == 100 {
@@ -504,7 +646,7 @@ func parallelBenchmarkRead(b *testing.B, c *testRun, blockSize int, fileSize int
 				}
 				readSize := int32(blockSz)
 				for offset < maxoffset {
-					if readSize > int32(maxoffset-offset) {
+					if int64(readSize) > int64(maxoffset-offset) {
 						readSize = int32(maxoffset - offset)
 					}
 					bt, err = thh.connection.Read(ctx, fh, offset, int32(readSize))
@@ -545,8 +687,34 @@ func TestMatrix(t *testing.T) {
 func testNewProxyConnection(t *testing.T, c *testRun) {
 	t.Logf("Creating connection for %d\n", c.volume)
 	c.connection = dconnect(t, c)
+	ct := 0
+	for c.connection == nil {
+		time.Sleep(15 * time.Second)
+		c.connection = dconnect(t, c)
+		ct++
+		if ct > 5 {
+			break
+		}
+
+	}
 	assert.NotNil(t, c.connection)
 
+}
+
+func testCompression(t *testing.T, c *testRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	uf := "resources/testdata.tar"
+	fi, err := os.Stat(uf)
+	assert.Nil(t, err)
+	fn := string(randBytesMaskImpr(16))
+	_, err = c.connection.Upload(ctx, uf, fn, 1024)
+	assert.Nil(t, err)
+	info, _ := c.connection.Stat(ctx, fn)
+	t.Logf("afd %d vfd %d fsz %d", info.IoMonitor.ActualBytesWritten, info.IoMonitor.VirtualBytesWritten, fi.Size())
+	assert.Less(t, info.IoMonitor.ActualBytesWritten, fi.Size())
+	err = c.connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
 }
 
 func testChow(t *testing.T, c *testRun) {
@@ -652,6 +820,64 @@ func testStatFS(t *testing.T, c *testRun) {
 	defer cancel()
 	_, err := c.connection.StatFS(ctx)
 	assert.Nil(t, err)
+}
+
+func testReconcileCloudMetadata(t *testing.T, c *testRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var keys []string
+	fn, _ := makeFile(ctx, t, c, "", 20480)
+	if c.s3 {
+		endpoint := "localhost:9000"
+		accessKeyID := "MINIO"
+		secretAccessKey := "MINIO1234"
+		useSSL := false
+		minioClient, err := minio.New(endpoint, &minio.Options{
+			Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
+			Secure: useSSL,
+		})
+		assert.Nil(t, err)
+		objectCh := minioClient.ListObjects(ctx, "pool0", minio.ListObjectsOptions{
+			Prefix:    "files",
+			Recursive: true,
+		})
+		for object := range objectCh {
+			if object.Err != nil {
+				t.Errorf(" error while listing objects %v", object.Err)
+				assert.Nil(t, object.Err)
+			}
+			keys = append(keys, object.Key)
+			_ = minioClient.RemoveObject(context.Background(), "pool0", object.Key, minio.RemoveObjectOptions{
+				GovernanceBypass: true,
+			})
+		}
+		objectCh = minioClient.ListObjects(ctx, "pool0", minio.ListObjectsOptions{
+			Prefix:    "ddb",
+			Recursive: true,
+		})
+		for object := range objectCh {
+			if object.Err != nil {
+				t.Errorf(" error while listing objects %v", object.Err)
+				assert.Nil(t, object.Err)
+			}
+			keys = append(keys, object.Key)
+			_ = minioClient.RemoveObject(context.Background(), "pool0", object.Key, minio.RemoveObjectOptions{
+				GovernanceBypass: true,
+			})
+		}
+		c.connection.ReconcileCloudMetadata(ctx, true)
+		for _, key := range keys {
+			objInfo, err := minioClient.StatObject(context.Background(), "pool0", key, minio.StatObjectOptions{})
+			if err != nil {
+				t.Errorf(" error while getting object %k", err)
+				assert.Nil(t, err)
+			}
+			assert.NotNil(t, objInfo)
+		}
+	}
+	err := c.connection.DeleteFile(ctx, fn)
+	assert.Nil(t, err)
+
 }
 
 func testRename(t *testing.T, c *testRun) {
@@ -780,9 +1006,11 @@ func testTuncate(t *testing.T, c *testRun) {
 func testWriteLargeBlock(t *testing.T, c *testRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tMb := int64(1024 * 1024 * 10)
+	tMb := int64(1024 * 1024 * 100)
 	fMb := 1024 * 5
 	fn, _ := makeLargeBlockFile(ctx, t, c, "", tMb, fMb)
+	info, _ := c.connection.Stat(ctx, fn)
+	t.Logf("afd %d vfd %d", info.IoMonitor.ActualBytesWritten, info.IoMonitor.VirtualBytesWritten)
 	err := c.connection.DeleteFile(ctx, fn)
 	assert.Nil(t, err)
 }
@@ -1156,6 +1384,71 @@ func testUpload(t *testing.T, c *testRun) {
 	c.connection.DeleteFile(ctx, fn)
 }
 
+func testCloudAutoDownload(t *testing.T, c *testRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fsz := int64(1024 * 1024 * 10)
+	fn, hs := makeFile(ctx, t, c, "", fsz)
+	cmd := "chattr -i /opt/sdfs/volumes/.pool0/files/" + fn
+	cr, err := DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	//t.Logf("chattr cmd output %s", cr.outBuffer.String())
+	//t.Logf("chattr err cmd output %s", cr.errBuffer.String())
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	cmd = "rm /opt/sdfs/volumes/.pool0/files/" + fn
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	//t.Logf("rm cmd output %s", cr.outBuffer.String())
+	//t.Logf("rm err cmd output %s", cr.errBuffer.String())
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	chs, err := readFile(ctx, t, c, fn, true)
+	assert.Nil(t, err)
+	assert.Equal(t, chs, hs)
+	fn, hs = makeFile(ctx, t, c, "", fsz)
+	fi, err := c.connection.Stat(ctx, fn)
+	assert.Nil(t, err)
+	ddbpth := fmt.Sprintf("%s/%s/", fi.MapGuid[:2], fi.MapGuid)
+	cmd = "rm -rf /opt/sdfs/volumes/.pool0/ddb/" + ddbpth
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	//t.Logf("rm cmd output %s", cr.outBuffer.String())
+	//t.Logf("rm err cmd output %s", cr.errBuffer.String())
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	cmd = "ls -lah /opt/sdfs/volumes/.pool0/ddb/" + ddbpth
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	//t.Logf("rm cmd output %s", cr.outBuffer.String())
+	//t.Logf("rm err cmd output %s", cr.errBuffer.String())
+	assert.Nil(t, err)
+	assert.Equal(t, 2, cr.ExitCode)
+	chs, err = readFile(ctx, t, c, fn, true)
+	assert.Nil(t, err)
+	assert.Equal(t, chs, hs)
+	fn, hs = makeFile(ctx, t, c, "", fsz)
+	fi, err = c.connection.Stat(ctx, fn)
+	assert.Nil(t, err)
+	ddbpth = fmt.Sprintf("%s/%s/", fi.MapGuid[:2], fi.MapGuid)
+	cmd = "rm -rf /opt/sdfs/volumes/.pool0/ddb/" + ddbpth
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	cmd = "ls -lah /opt/sdfs/volumes/.pool0/ddb/" + ddbpth
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	assert.Nil(t, err)
+	assert.Equal(t, 2, cr.ExitCode)
+	cmd = "chattr -i /opt/sdfs/volumes/.pool0/files/" + fn
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	cmd = "rm /opt/sdfs/volumes/.pool0/files/" + fn
+	cr, err = DockerExec(ctx, c.cfg.containername, strings.Split(cmd, " "))
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	chs, err = readFile(ctx, t, c, fn, true)
+	assert.Nil(t, err)
+	assert.Equal(t, chs, hs)
+
+}
+
 func testCloudSync(t *testing.T, c *testRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1225,7 +1518,7 @@ func testCloudSync(t *testing.T, c *testRun) {
 	fn, sh := makeGenericFile(ctx, t, c.connection, "", 1024)
 	fi, err := c.connection.Stat(ctx, fn)
 	assert.Nil(t, err)
-	_, err = tr.connection.SyncFromCloudVolume(ctx, info.SerialNumber, true)
+	_, err = tr.connection.SyncFromCloudVolume(ctx, info.SerialNumber, true, true)
 	assert.Nil(t, err)
 	nfi, err := tr.connection.Stat(ctx, fn)
 	assert.Nil(t, err)
@@ -1352,6 +1645,7 @@ func TestReloadProxyVolume(t *testing.T) {
 			retrys++
 		}
 	}
+	assert.Nil(t, err)
 	if err != nil {
 		fmt.Printf("Unable to create connection %v", err)
 	}
@@ -1434,7 +1728,7 @@ func startProxyVolume(tr []*testRun) {
 		connection, err := api.NewConnection(m.url, false, true, -1, 0, 0)
 		retrys := 0
 		for err != nil {
-			log.Printf("retries = %d", retrys)
+			log.Debugf("retries = %d", retrys)
 			time.Sleep(20 * time.Second)
 			connection, err = api.NewConnection(m.url, false, true, -1, 0, 0)
 			if retrys > 10 {
@@ -1447,7 +1741,7 @@ func startProxyVolume(tr []*testRun) {
 		if err != nil {
 			fmt.Printf("Unable to create connection %v", err)
 		}
-		log.Printf("connected to volume = %d for %s", connection.Volumeid, m.cfg.containername)
+		log.Debugf("connected to volume = %d for %s", connection.Volumeid, m.cfg.containername)
 		m.volume = connection.Volumeid
 		cmp[connection.Volumeid] = connection.Clnt
 		fe = paip.ForwardEntry{
@@ -1483,8 +1777,39 @@ func startProxyVolume(tr []*testRun) {
 
 }
 
-func TestMain(m *testing.M) {
+var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+var memprofile = flag.String("memprofile", "", "write memory profile to `file`")
 
+func TestMain(m *testing.M) {
+	go func() {
+		log.Println(http.ListenAndServe(":8081", nil))
+	}()
+	flag.Parse()
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	// ... rest of the program ...
+
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close() // error handling omitted for example
+		runtime.GC()    // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+	}
 	rand.Seed(time.Now().UTC().UnixNano())
 	code := m.Run()
 	fmt.Printf("Testing Return code is %d\n", code)
@@ -1511,10 +1836,19 @@ func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 	}
 
 	connection, err := api.NewConnection(address, dedupe, true, volumeid, 40000, 60)
-	if err != nil {
-		t.Errorf("Unable to connect to %s error: %v\n", address, err)
-		return nil
+	retrys := 0
+	for err != nil {
+		t.Logf("retries = %d\n", retrys)
+		time.Sleep(20 * time.Second)
+		connection, err = api.NewConnection(address, dedupe, true, volumeid, 40000, 60)
+		if retrys > 10 {
+			t.Errorf("SDFS Server connection timed out %s\n", address)
+			os.Exit(-1)
+		} else {
+			retrys++
+		}
 	}
+	assert.Nil(t, err)
 	t.Logf("Connection state %s", connection.Clnt.GetState())
 	if volumeid != -1 {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -1558,14 +1892,22 @@ func benchmarkConnect(b *testing.B, c *testRun) *api.SdfsConnection {
 		}
 		vid = c.volume
 	}
-	b.Logf("Connecting to %s dedupe is %v", address, c.clientsidededupe)
+	log.Debugf("Connecting to %s dedupe is %v", address, c.clientsidededupe)
 
 	connection, err := api.NewConnection(address, c.clientsidededupe, true, vid, 40000, 60)
-	if err != nil {
-		b.Errorf("Unable to connect to %s error: %v\n", address, err)
-		return nil
+	retrys := 0
+	for err != nil {
+		log.Debugf("retries = %d\n", retrys)
+		time.Sleep(20 * time.Second)
+		connection, err = api.NewConnection(address, c.clientsidededupe, true, vid, 40000, 60)
+		if retrys > 10 {
+			log.Warnf("SDFS Server connection timed out %s\n", address)
+		} else {
+			retrys++
+		}
 	}
-	b.Logf("Connection state %s", connection.Clnt.GetState())
+
+	log.Debugf("Connection state %s", connection.Clnt.GetState())
 	if vid != -1 {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -1609,10 +1951,18 @@ func dconnect(t *testing.T, c *testRun) *api.SdfsConnection {
 	t.Logf("Connecting to %s dedupe is %v", address, c.clientsidededupe)
 
 	connection, err := api.NewConnection(address, c.clientsidededupe, true, vid, 40000, 60)
-	if err != nil {
-		t.Errorf("Unable to connect to %s error: %v\n", address, err)
-		return nil
+	retrys := 0
+	for err != nil {
+		log.Warnf("retries = %d\n", retrys)
+		time.Sleep(20 * time.Second)
+		connection, err = api.NewConnection(address, c.clientsidededupe, true, vid, 40000, 60)
+		if retrys > 10 {
+			log.Warnf("SDFS Server connection timed out %s\n", address)
+		} else {
+			retrys++
+		}
 	}
+	assert.Nil(t, err)
 	t.Logf("Connection state %s", connection.Clnt.GetState())
 	if vid != -1 {
 		ctx, cancel := context.WithCancel(context.Background())

@@ -2,6 +2,7 @@ package test
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	network "github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/docker/pkg/system"
 	natting "github.com/docker/go-connections/nat"
 	log "github.com/sirupsen/logrus"
@@ -94,6 +96,7 @@ func copyToContainer(ctx context.Context, container, srcPath, dstPath string) (e
 }
 
 func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
+	log.Debugf(" config is %v", cfg)
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
 		log.Fatal(err)
@@ -131,8 +134,23 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 			Config: map[string]string{},
 		},
 	}
+	if cfg.attachProfiler {
+		profilingPort, err := natting.NewPort("tcp", "8849")
+		if err != nil {
+			fmt.Println("Unable to create docker port")
+			return "", err
+		}
+
+		hostConfig.PortBindings[profilingPort] = []natting.PortBinding{
+			{
+				HostIP:   "0.0.0.0",
+				HostPort: "8849",
+			},
+		}
+	}
 	if cfg.memory > 0 {
 		hostConfig.Resources.Memory = cfg.memory
+		hostConfig.Resources.MemorySwap = cfg.memory
 	}
 	if cfg.cpu > 0 {
 		hostConfig.Resources.NanoCPUs = cfg.cpu * 1000000000
@@ -141,8 +159,8 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 		hostConfig.Mounts = []mount.Mount{
 			{
 				Type:   mount.TypeBind,
-				Source: "/opt/sdfs",
-				Target: "/opt/sdfs",
+				Source: "/opt/",
+				Target: "/opt/",
 			},
 		}
 	}
@@ -189,7 +207,7 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 	val, present := os.LookupEnv("SDFS_COPY_FILE_TO")
 	if present && cfg.copyFile {
 		s := strings.Split(val, ":")
-		log.Infof("copy data %s to %s:%s", s[0], cfg.containername, s[1])
+		log.Debugf("copy data %s to %s:%s", s[0], cfg.containername, s[1])
 		err = copyToContainer(ctx, cfg.containername, s[0], s[1])
 		if err != nil {
 			log.Error(err)
@@ -203,8 +221,7 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 		log.Println(err)
 		return "", err
 	}
-
-	log.Printf("Container %s is created", cont.ID)
+	log.Debugf("Container %s is created", cont.ID)
 	go func() {
 		reader, err := client.ContainerLogs(context.Background(), cont.ID, types.ContainerLogsOptions{
 			ShowStdout: true,
@@ -246,7 +263,7 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 				}
 			}
 		}
-		log.Infof("exiting reader for %s", fn)
+		log.Debugf("exiting reader for %s", fn)
 	}()
 
 	if err != nil {
@@ -287,7 +304,7 @@ func CreateAzureSetup(ctx context.Context, cfg *containerConfig) (*testRun, erro
 	}
 	cfg.imagename = sdfsimagename
 
-	cfg.inputEnv = []string{"TYPE=AZURE", fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("BUCKET_NAME=%s", os.Getenv("AZURE_BUCKET_NAME")), fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("SECRET_KEY=%s", os.Getenv("AZURE_SECRET_KEY")), fmt.Sprintf("CAPACITY=%s", "1TB")}
+	cfg.inputEnv = []string{"TYPE=AZURE", "BACKUP_VOLUME=true", fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("BUCKET_NAME=%s", os.Getenv("AZURE_BUCKET_NAME")), fmt.Sprintf("ACCESS_KEY=%s", os.Getenv("AZURE_ACCESS_KEY")), fmt.Sprintf("SECRET_KEY=%s", os.Getenv("AZURE_SECRET_KEY")), fmt.Sprintf("CAPACITY=%s", "1TB")}
 	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
 	if cfg.encrypt {
 		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --chunk-store-encrypt=true")
@@ -319,10 +336,11 @@ func CreateS3Setup(ctx context.Context, cfg *containerConfig) (*testRun, error) 
 	if err != nil {
 		return nil, err
 	}
-	s3bucket := string(randBytesMaskImpr(16))
+	s3bucket := "pool0"
 	cfg.imagename = sdfsimagename
+	cfg.containerPort = "6442"
 
-	cfg.inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
+	cfg.inputEnv = []string{fmt.Sprintf("CAPACITY=%s", "1TB"), "BACKUP_VOLUME=true", "EXTENDED_CMD=--hashtable-rm-threshold=1000 --aws-disable-dns-bucket=true --minio-enabled",
 		fmt.Sprintf("TYPE=%s", "AWS"), fmt.Sprintf("URL=%s", "http://minio:9000"), fmt.Sprintf("BUCKET_NAME=%s", s3bucket),
 		fmt.Sprintf("ACCESS_KEY=%s", "MINIO"), fmt.Sprintf("SECRET_KEY=%s", "MINIO1234")}
 	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
@@ -345,10 +363,13 @@ func CreateS3Setup(ctx context.Context, cfg *containerConfig) (*testRun, error) 
 func CreateBlockSetup(ctx context.Context, cfg *containerConfig) (*testRun, error) {
 	cfg.inputEnv = []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "1TB")}
 	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
+	if cfg.attachProfiler {
+		cfg.inputEnv = append(cfg.inputEnv, "JAVA_EXT_CMD=-agentpath:/opt/jprofiler13/bin/linux-x64/libjprofilerti.so=port=8849,nowait")
+	}
 	if cfg.encrypt {
 		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --chunk-store-encrypt=true")
 	} else {
-		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000")
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --io-chunk-size=20480 --io-max-file-write-buffers=40")
 	}
 	cfg.imagename = sdfsimagename
 	cfg.containerPort = "6442"
@@ -359,8 +380,8 @@ func CreateBlockSetup(ctx context.Context, cfg *containerConfig) (*testRun, erro
 		return nil, err
 	}
 	btr := &testRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "blockstorage", cfg: cfg, cloudVol: false}
+	log.Infof("config=%v", cfg)
 	return btr, nil
-
 }
 
 func StopAndRemoveContainer(ctx context.Context, containername string) error {
@@ -371,9 +392,9 @@ func StopAndRemoveContainer(ctx context.Context, containername string) error {
 	client.NegotiateAPIVersion(ctx)
 
 	defer client.Close()
-	log.Printf("Stopping container %s", containername)
+	log.Debugf("Stopping container %s", containername)
 	if err := client.ContainerStop(ctx, containername, nil); err != nil {
-		log.Printf("Unable to stop container %s: %s", containername, err)
+		log.Debugf("Unable to stop container %s: %s", containername, err)
 	}
 
 	removeOptions := types.ContainerRemoveOptions{
@@ -382,9 +403,70 @@ func StopAndRemoveContainer(ctx context.Context, containername string) error {
 	}
 
 	if err := client.ContainerRemove(ctx, containername, removeOptions); err != nil {
-		log.Printf("Unable to remove container: %s", err)
+		log.Debugf("Unable to remove container: %s", err)
 		return err
 	}
-
 	return nil
+}
+
+type ExecResult struct {
+	ExitCode  int
+	outBuffer *bytes.Buffer
+	errBuffer *bytes.Buffer
+}
+
+func DockerExec(ctx context.Context, id string, cmd []string) (ExecResult, error) {
+	cli, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer cli.Close()
+	cli.NegotiateAPIVersion(ctx)
+	// prepare exec
+	execConfig := types.ExecConfig{
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd:          cmd,
+	}
+	cresp, err := cli.ContainerExecCreate(ctx, id, execConfig)
+	if err != nil {
+		return ExecResult{}, err
+	}
+	execID := cresp.ID
+
+	// run it, with stdout/stderr attached
+	aresp, err := cli.ContainerExecAttach(ctx, execID, types.ExecStartCheck{})
+	if err != nil {
+		return ExecResult{}, err
+	}
+	defer aresp.Close()
+
+	// read the output
+	var outBuf, errBuf bytes.Buffer
+	outputDone := make(chan error)
+
+	go func() {
+		// StdCopy demultiplexes the stream into two buffers
+		_, err = stdcopy.StdCopy(&outBuf, &errBuf, aresp.Reader)
+		outputDone <- err
+	}()
+
+	select {
+	case err := <-outputDone:
+		if err != nil {
+			return ExecResult{}, err
+		}
+		break
+
+	case <-ctx.Done():
+		return ExecResult{}, ctx.Err()
+	}
+
+	// get the exit code
+	iresp, err := cli.ContainerExecInspect(ctx, execID)
+	if err != nil {
+		return ExecResult{}, err
+	}
+
+	return ExecResult{ExitCode: iresp.ExitCode, outBuffer: &outBuf, errBuffer: &errBuf}, nil
 }
