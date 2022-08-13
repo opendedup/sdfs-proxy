@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type containerConfig struct {
+type ContainerConfig struct {
 	cpu                                               int64
 	memory                                            int64
 	encrypt                                           bool
@@ -45,7 +45,7 @@ type containerConfig struct {
 	attachProfiler                                    bool
 }
 
-type testRun struct {
+type TestRun struct {
 	name             string
 	volume           int64
 	clientsidededupe bool
@@ -55,10 +55,10 @@ type testRun struct {
 	s3               bool
 	fe               *paip.ForwardEntry
 	direct           bool
-	cfg              *containerConfig
+	cfg              *ContainerConfig
 }
 
-//var maddress []*testRun
+//var maddress []*TestRun
 
 var tls = false
 var mtls = false
@@ -75,26 +75,26 @@ func runMatix(t *testing.T, testType string, tests []string) {
 	defer cancel()
 
 	for _, name := range tests {
-		var c *testRun
+		var c *TestRun
 		var err error
 		t.Run(fmt.Sprintf("%s/%s", testType, name), func(t *testing.T) {
 			switch n := name; n {
 			case "AZURE":
-				cfg := &containerConfig{containername: "azure-6442", hostPort: "6442"}
+				cfg := &ContainerConfig{containername: "azure-6442", hostPort: "6442"}
 				//c.cfg = cfg
 				c, err = CreateAzureSetup(ctx, cfg)
 				c.name = n
 				c.cloudVol = true
 				assert.Nil(t, err)
 			case "BLOCK":
-				cfg := &containerConfig{containername: "block-6442", hostPort: "6442"}
+				cfg := &ContainerConfig{containername: "block-6442", hostPort: "6442"}
 				//c.cfg = cfg
 				c, err = CreateBlockSetup(ctx, cfg)
 				c.name = n
 				c.cloudVol = false
 				assert.Nil(t, err)
 			case "S3":
-				cfg := &containerConfig{containername: "s3-6442", hostPort: "6442"}
+				cfg := &ContainerConfig{containername: "s3-6442", hostPort: "6442"}
 				//c.cfg = cfg
 				c, err = CreateS3Setup(ctx, cfg)
 				if err != nil {
@@ -119,7 +119,7 @@ func runMatix(t *testing.T, testType string, tests []string) {
 				c.clientsidededupe = false
 				c.direct = true
 			}
-			trs := []*testRun{c}
+			trs := []*TestRun{c}
 			if !c.direct {
 				startProxyVolume(trs)
 			}
@@ -251,7 +251,7 @@ func BenchmarkWrites(b *testing.B) {
 	defer cancel()
 	for _, testType := range testTypes {
 		for _, name := range tests {
-			var c *testRun
+			var c *TestRun
 			var err error
 			b.Run(fmt.Sprintf("%s/%s", testType, name), func(b *testing.B) {
 				//remove old data
@@ -267,7 +267,7 @@ func BenchmarkWrites(b *testing.B) {
 				}
 				switch n := name; n {
 				case "AZURE":
-					cfg := &containerConfig{containername: "azure-6442", hostPort: "6442", mountstorage: true}
+					cfg := &ContainerConfig{containername: "azure-6442", hostPort: "6442", mountstorage: true}
 					//c.cfg = cfg
 					c, err = CreateAzureSetup(ctx, cfg)
 					if err != nil {
@@ -276,7 +276,7 @@ func BenchmarkWrites(b *testing.B) {
 					c.name = n
 					c.cloudVol = true
 				case "BLOCK":
-					cfg := &containerConfig{containername: "block-6442", hostPort: "6442", mountstorage: true}
+					cfg := &ContainerConfig{containername: "block-6442", hostPort: "6442", mountstorage: true}
 					//c.cfg = cfg
 					c, err = CreateBlockSetup(ctx, cfg)
 					if err != nil {
@@ -285,7 +285,7 @@ func BenchmarkWrites(b *testing.B) {
 					c.name = n
 					c.cloudVol = false
 				case "EB":
-					cfg := &containerConfig{attachProfiler: true, containername: "eblock-6442", hostPort: "6442", mountstorage: true, encrypt: true}
+					cfg := &ContainerConfig{attachProfiler: true, containername: "eblock-6442", hostPort: "6442", mountstorage: true, encrypt: true}
 					//c.cfg = cfg
 					c, err = CreateBlockSetup(ctx, cfg)
 					if err != nil {
@@ -294,7 +294,7 @@ func BenchmarkWrites(b *testing.B) {
 					c.name = n
 					c.cloudVol = false
 				case "S3":
-					cfg := &containerConfig{containername: "s3-6442", hostPort: "6442", mountstorage: true}
+					cfg := &ContainerConfig{containername: "s3-6442", hostPort: "6442", mountstorage: true}
 					//c.cfg = cfg
 					c, err = CreateS3Setup(ctx, cfg)
 					if err != nil {
@@ -318,7 +318,7 @@ func BenchmarkWrites(b *testing.B) {
 					c.clientsidededupe = false
 					c.direct = true
 				}
-				trs := []*testRun{c}
+				trs := []*TestRun{c}
 				if !c.direct {
 					startProxyVolume(trs)
 				}
@@ -408,7 +408,7 @@ func BenchmarkWrites(b *testing.B) {
 
 }
 
-func parallelBenchmarkUpload(b *testing.B, c *testRun, blockSize int, fileSize int64, percentUnique, threads int) {
+func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize int64, percentUnique, threads int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	type th struct {
@@ -480,7 +480,7 @@ func parallelBenchmarkUpload(b *testing.B, c *testRun, blockSize int, fileSize i
 }
 
 /*
-func parallelBenchmarkWrite(b *testing.B, c *testRun, blockSize int, fileSize int64, percentUnique, threads int) {
+func parallelBenchmarkWrite(b *testing.B, c *TestRun, blockSize int, fileSize int64, percentUnique, threads int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	type th struct {
@@ -552,7 +552,7 @@ func parallelBenchmarkWrite(b *testing.B, c *testRun, blockSize int, fileSize in
 
 }
 */
-func parallelBenchmarkRead(b *testing.B, c *testRun, blockSize int, fileSize int64, percentUnique, threads int) {
+func parallelBenchmarkRead(b *testing.B, c *TestRun, blockSize int, fileSize int64, percentUnique, threads int) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	type th struct {
@@ -684,7 +684,7 @@ func TestMatrix(t *testing.T) {
 	runMatix(t, "DIRECTDEDUPE", tests)
 }
 
-func testNewProxyConnection(t *testing.T, c *testRun) {
+func testNewProxyConnection(t *testing.T, c *TestRun) {
 	t.Logf("Creating connection for %d\n", c.volume)
 	c.connection = dconnect(t, c)
 	ct := 0
@@ -701,7 +701,7 @@ func testNewProxyConnection(t *testing.T, c *testRun) {
 
 }
 
-func testCompression(t *testing.T, c *testRun) {
+func testCompression(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	uf := "resources/testdata.tar"
@@ -717,7 +717,7 @@ func testCompression(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 }
 
-func testChow(t *testing.T, c *testRun) {
+func testChow(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -731,7 +731,7 @@ func testChow(t *testing.T, c *testRun) {
 	deleteFile(t, c, fn)
 }
 
-func testMkNod(t *testing.T, c *testRun) {
+func testMkNod(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -742,7 +742,7 @@ func testMkNod(t *testing.T, c *testRun) {
 	deleteFile(t, c, fn)
 }
 
-func testMkDir(t *testing.T, c *testRun) {
+func testMkDir(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -759,7 +759,7 @@ func testMkDir(t *testing.T, c *testRun) {
 	assert.NotNil(t, err)
 }
 
-func testMkDirAll(t *testing.T, c *testRun) {
+func testMkDirAll(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -780,7 +780,7 @@ func testMkDirAll(t *testing.T, c *testRun) {
 	assert.NotNil(t, err)
 }
 
-func testListDir(t *testing.T, c *testRun) {
+func testListDir(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -810,19 +810,19 @@ func testListDir(t *testing.T, c *testRun) {
 	assert.NotNil(t, err)
 }
 
-func testCleanStore(t *testing.T, c *testRun) {
+func testCleanStore(t *testing.T, c *TestRun) {
 	cleanStore(t, c)
 
 }
 
-func testStatFS(t *testing.T, c *testRun) {
+func testStatFS(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, err := c.connection.StatFS(ctx)
 	assert.Nil(t, err)
 }
 
-func testReconcileCloudMetadata(t *testing.T, c *testRun) {
+func testReconcileCloudMetadata(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var keys []string
@@ -880,7 +880,7 @@ func testReconcileCloudMetadata(t *testing.T, c *testRun) {
 
 }
 
-func testRename(t *testing.T, c *testRun) {
+func testRename(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	fn, _ := makeFile(ctx, t, c, "", 1024)
@@ -896,7 +896,7 @@ func testRename(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 }
 
-func testCopyFile(t *testing.T, c *testRun) {
+func testCopyFile(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	fn, hash := makeFile(ctx, t, c, "", 1024)
@@ -914,7 +914,7 @@ func testCopyFile(t *testing.T, c *testRun) {
 	}
 }
 
-func testEvents(t *testing.T, c *testRun) {
+func testEvents(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	fn, hash := makeFile(ctx, t, c, "", 1024)
@@ -941,7 +941,7 @@ func testEvents(t *testing.T, c *testRun) {
 	}
 }
 
-func testXAttrs(t *testing.T, c *testRun) {
+func testXAttrs(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	fn, _ := makeFile(ctx, t, c, "", 1024)
@@ -975,7 +975,7 @@ func testXAttrs(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 }
 
-func testSetUtime(t *testing.T, c *testRun) {
+func testSetUtime(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -990,7 +990,7 @@ func testSetUtime(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 }
 
-func testTuncate(t *testing.T, c *testRun) {
+func testTuncate(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	fn, _ := makeFile(ctx, t, c, "", 1024*1024*10)
@@ -1003,7 +1003,7 @@ func testTuncate(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 }
 
-func testWriteLargeBlock(t *testing.T, c *testRun) {
+func testWriteLargeBlock(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	tMb := int64(1024 * 1024 * 100)
@@ -1015,7 +1015,7 @@ func testWriteLargeBlock(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 }
 
-func testSymLink(t *testing.T, c *testRun) {
+func testSymLink(t *testing.T, c *TestRun) {
 	if runtime.GOOS != "windows" {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -1042,7 +1042,7 @@ func testSymLink(t *testing.T, c *testRun) {
 	}
 }
 
-func testSync(t *testing.T, c *testRun) {
+func testSync(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	fn, _ := makeFile(ctx, t, c, "", 1024)
@@ -1059,7 +1059,7 @@ func testSync(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 }
 
-func testMaxAge(t *testing.T, c *testRun) {
+func testMaxAge(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	info, err := c.connection.DSEInfo(ctx)
@@ -1182,7 +1182,7 @@ func testMaxAge(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 }
 
-func testCopyExtent(t *testing.T, c *testRun) {
+func testCopyExtent(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	fn, _ := makeFile(ctx, t, c, "", 1024)
@@ -1221,7 +1221,7 @@ func testCopyExtent(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 }
 
-func testInfo(t *testing.T, c *testRun) {
+func testInfo(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, err := c.connection.GetVolumeInfo(ctx)
@@ -1232,7 +1232,7 @@ func testInfo(t *testing.T, c *testRun) {
 	assert.Nil(t, err)
 }
 
-func testGCSchedule(t *testing.T, c *testRun) {
+func testGCSchedule(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	gc, err := c.connection.GetGCSchedule(ctx)
@@ -1240,7 +1240,7 @@ func testGCSchedule(t *testing.T, c *testRun) {
 	t.Logf("GC Sched = %s", gc)
 }
 
-func testCache(t *testing.T, c *testRun) {
+func testCache(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1261,7 +1261,7 @@ func testCache(t *testing.T, c *testRun) {
 	assert.Equal(t, int64(10)*gb, dse.MaxCacheSize)
 }
 
-func testSetRWSpeed(t *testing.T, c *testRun) {
+func testSetRWSpeed(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	err := c.connection.SetReadSpeed(ctx, int32(1000))
@@ -1274,7 +1274,7 @@ func testSetRWSpeed(t *testing.T, c *testRun) {
 	assert.Equal(t, int32(2000), dse.WriteSpeed)
 }
 
-func testSetVolumeSize(t *testing.T, c *testRun) {
+func testSetVolumeSize(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	err := c.connection.SetVolumeCapacity(ctx, int64(100)*tb)
@@ -1284,7 +1284,7 @@ func testSetVolumeSize(t *testing.T, c *testRun) {
 	assert.Equal(t, int64(100)*tb, vol.Capactity)
 }
 
-func cleanStore(t *testing.T, c *testRun) {
+func cleanStore(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var files []string
@@ -1336,7 +1336,7 @@ func TestCert(t *testing.T) {
 
 }*/
 
-func testShutdown(t *testing.T, c *testRun) {
+func testShutdown(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	_, err := c.connection.DSEInfo(ctx)
@@ -1350,7 +1350,7 @@ func testShutdown(t *testing.T, c *testRun) {
 
 }
 
-func testUpload(t *testing.T, c *testRun) {
+func testUpload(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	fn := string(randBytesMaskImpr(16))
@@ -1384,7 +1384,7 @@ func testUpload(t *testing.T, c *testRun) {
 	c.connection.DeleteFile(ctx, fn)
 }
 
-func testCloudAutoDownload(t *testing.T, c *testRun) {
+func testCloudAutoDownload(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	fsz := int64(1024 * 1024 * 10)
@@ -1449,7 +1449,7 @@ func testCloudAutoDownload(t *testing.T, c *testRun) {
 
 }
 
-func testCloudSync(t *testing.T, c *testRun) {
+func testCloudSync(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cfg := c.cfg
@@ -1457,7 +1457,7 @@ func testCloudSync(t *testing.T, c *testRun) {
 	cfg.containerPort = "6442"
 	cfg.hostPort = fmt.Sprintf("2%s", c.cfg.hostPort)
 	durl := fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort)
-	tr := &testRun{url: durl, name: fmt.Sprintf("second-%s", c.name), cfg: cfg, cloudVol: true, clientsidededupe: c.clientsidededupe}
+	tr := &TestRun{url: durl, name: fmt.Sprintf("second-%s", c.name), cfg: cfg, cloudVol: true, clientsidededupe: c.clientsidededupe}
 	fe := paip.ForwardEntry{
 		Address:       tr.url,
 		Dedupe:        false,
@@ -1465,7 +1465,7 @@ func testCloudSync(t *testing.T, c *testRun) {
 		DedupeBuffer:  4,
 	}
 	portR := &paip.PortRedirectors{}
-	maddress := [2]*testRun{c, tr}
+	maddress := [2]*TestRun{c, tr}
 
 	for _, c := range maddress {
 		portR.ForwardEntrys = append(portR.ForwardEntrys, *c.fe)
@@ -1574,17 +1574,17 @@ func TestProxyVolumeInfo(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var port = 2
-	var testRuns []*testRun
+	var TestRuns []*TestRun
 	for i := 2; i < 4; i++ {
-		cfg := &containerConfig{containername: fmt.Sprintf("block-644%d", port), hostPort: fmt.Sprintf("644%d", port)}
+		cfg := &ContainerConfig{containername: fmt.Sprintf("block-644%d", port), hostPort: fmt.Sprintf("644%d", port)}
 		tst, err := CreateBlockSetup(ctx, cfg)
 		assert.Nil(t, err)
 		port++
-		testRuns = append(testRuns, tst)
+		TestRuns = append(TestRuns, tst)
 	}
-	startProxyVolume(testRuns)
+	startProxyVolume(TestRuns)
 	var volumeIds []int64
-	for _, c := range testRuns {
+	for _, c := range TestRuns {
 		volumeIds = append(volumeIds, c.volume)
 	}
 
@@ -1601,7 +1601,7 @@ func TestProxyVolumeInfo(t *testing.T) {
 	}
 	assert.ElementsMatch(t, vids, volumeIds)
 	paip.StopServer()
-	for _, c := range testRuns {
+	for _, c := range TestRuns {
 		StopAndRemoveContainer(ctx, c.cfg.containername)
 	}
 }
@@ -1609,16 +1609,16 @@ func TestProxyVolumeInfo(t *testing.T) {
 func TestReloadProxyVolume(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	var testRuns []*testRun
+	var TestRuns []*TestRun
 	for i := 2; i < 5; i++ {
-		cfg := &containerConfig{containername: fmt.Sprintf("block-644%d", i), hostPort: fmt.Sprintf("644%d", i)}
+		cfg := &ContainerConfig{containername: fmt.Sprintf("block-644%d", i), hostPort: fmt.Sprintf("644%d", i)}
 		tst, err := CreateBlockSetup(ctx, cfg)
 		assert.Nil(t, err)
-		testRuns = append(testRuns, tst)
+		TestRuns = append(TestRuns, tst)
 	}
-	startProxyVolume(testRuns[1:])
+	startProxyVolume(TestRuns[1:])
 	var volumeIds []int64
-	for _, c := range testRuns[1:] {
+	for _, c := range TestRuns[1:] {
 		t.Logf("tr serial = %d", c.volume)
 		volumeIds = append(volumeIds, c.volume)
 	}
@@ -1632,14 +1632,14 @@ func TestReloadProxyVolume(t *testing.T) {
 	}
 	assert.ElementsMatch(t, vids, volumeIds)
 	//Get the volume id for the first volume
-	cc, err := api.NewConnection(testRuns[0].url, false, true, -1, 0, 0)
+	cc, err := api.NewConnection(TestRuns[0].url, false, true, -1, 0, 0)
 	retrys := 0
 	for err != nil {
 		log.Printf("retries = %d", retrys)
 		time.Sleep(20 * time.Second)
-		cc, err = api.NewConnection(testRuns[0].url, false, true, -1, 0, 0)
+		cc, err = api.NewConnection(TestRuns[0].url, false, true, -1, 0, 0)
 		if retrys > 10 {
-			fmt.Printf("SDFS Server connection timed out %s\n", testRuns[0].url)
+			fmt.Printf("SDFS Server connection timed out %s\n", TestRuns[0].url)
 			os.Exit(-1)
 		} else {
 			retrys++
@@ -1649,8 +1649,8 @@ func TestReloadProxyVolume(t *testing.T) {
 	if err != nil {
 		fmt.Printf("Unable to create connection %v", err)
 	}
-	log.Printf("connected to volume = %d for %s", cc.Volumeid, testRuns[0].cfg.containername)
-	testRuns[0].volume = cc.Volumeid
+	log.Printf("connected to volume = %d for %s", cc.Volumeid, TestRuns[0].cfg.containername)
+	TestRuns[0].volume = cc.Volumeid
 	//Test Add a Volume
 	portR := &paip.PortRedirectors{}
 	for i := 2; i < 5; i++ {
@@ -1668,7 +1668,7 @@ func TestReloadProxyVolume(t *testing.T) {
 	vids = make([]int64, 0)
 	volumeIds = make([]int64, 0)
 
-	for _, c := range testRuns {
+	for _, c := range TestRuns {
 		volumeIds = append(volumeIds, c.volume)
 		t.Logf("tr serial = %d", c.volume)
 	}
@@ -1694,7 +1694,7 @@ func TestReloadProxyVolume(t *testing.T) {
 	vids = make([]int64, 0)
 	volumeIds = make([]int64, 0)
 
-	for _, c := range testRuns[:len(testRuns)-1] {
+	for _, c := range TestRuns[:len(TestRuns)-1] {
 		volumeIds = append(volumeIds, c.volume)
 		t.Logf("tr serial = %d", c.volume)
 	}
@@ -1705,13 +1705,13 @@ func TestReloadProxyVolume(t *testing.T) {
 	assert.ElementsMatch(t, vids, volumeIds)
 	//Shut everything down
 	paip.StopServer()
-	for _, c := range testRuns {
+	for _, c := range TestRuns {
 		StopAndRemoveContainer(ctx, c.cfg.containername)
 	}
 
 }
 
-func startProxyVolume(tr []*testRun) {
+func startProxyVolume(tr []*TestRun) {
 	tls = true
 	api.DisableTrust = true
 	paip.ServerCACert = "out/signer_key.crt"
@@ -1869,7 +1869,7 @@ func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 	return connection
 }
 
-func benchmarkConnect(b *testing.B, c *testRun) *api.SdfsConnection {
+func benchmarkConnect(b *testing.B, c *TestRun) *api.SdfsConnection {
 
 	//api.DisableTrust = true
 	api.Debug = false
@@ -1925,7 +1925,7 @@ func benchmarkConnect(b *testing.B, c *testRun) *api.SdfsConnection {
 	return connection
 }
 
-func dconnect(t *testing.T, c *testRun) *api.SdfsConnection {
+func dconnect(t *testing.T, c *TestRun) *api.SdfsConnection {
 
 	//api.DisableTrust = true
 	api.Debug = false

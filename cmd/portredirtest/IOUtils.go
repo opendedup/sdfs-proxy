@@ -20,11 +20,11 @@ const (
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
 
-func makeFile(ctx context.Context, t *testing.T, c *testRun, parent string, size int64) (string, []byte) {
+func makeFile(ctx context.Context, t *testing.T, c *TestRun, parent string, size int64) (string, []byte) {
 	return makeGenericFile(ctx, t, c.connection, parent, size)
 }
 
-func makeLargeBlockFile(ctx context.Context, t *testing.T, c *testRun, parent string, size int64, blocksize int) (string, []byte) {
+func makeLargeBlockFile(ctx context.Context, t *testing.T, c *TestRun, parent string, size int64, blocksize int) (string, []byte) {
 	return makeLargeBlockGenericFile(ctx, t, c.connection, parent, size, blocksize)
 }
 
@@ -95,7 +95,7 @@ func makeLargeBlockGenericFile(ctx context.Context, t *testing.T, connection *ap
 	return fn, h.Sum(nil)
 }
 
-func readFile(ctx context.Context, t *testing.T, c *testRun, filenm string, delete bool) (data []byte, err error) {
+func readFile(ctx context.Context, t *testing.T, c *TestRun, filenm string, delete bool) (data []byte, err error) {
 	stat, err := c.connection.GetAttr(ctx, filenm)
 	assert.Nil(t, err)
 	if err != nil {
@@ -133,7 +133,7 @@ func readFile(ctx context.Context, t *testing.T, c *testRun, filenm string, dele
 	return bs, nil
 }
 
-func deleteFile(t *testing.T, c *testRun, fn string) {
+func deleteFile(t *testing.T, c *TestRun, fn string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	err := c.connection.DeleteFile(ctx, fn)

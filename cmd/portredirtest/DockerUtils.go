@@ -95,7 +95,7 @@ func copyToContainer(ctx context.Context, container, srcPath, dstPath string) (e
 	return client.CopyToContainer(ctx, container, resolvedDstPath, content, options)
 }
 
-func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
+func RunContainer(ctx context.Context, cfg *ContainerConfig) (string, error) {
 	log.Debugf(" config is %v", cfg)
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -273,7 +273,7 @@ func RunContainer(ctx context.Context, cfg *containerConfig) (string, error) {
 	return cont.ID, nil
 }
 
-func CreateAzureSetup(ctx context.Context, cfg *containerConfig) (*testRun, error) {
+func CreateAzureSetup(ctx context.Context, cfg *ContainerConfig) (*TestRun, error) {
 	credential, err := azblob.NewSharedKeyCredential(os.Getenv("AZURE_ACCESS_KEY"), os.Getenv("AZURE_SECRET_KEY"))
 	p := azblob.NewPipeline(credential, azblob.PipelineOptions{})
 	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net", os.Getenv("AZURE_ACCESS_KEY")))
@@ -319,12 +319,12 @@ func CreateAzureSetup(ctx context.Context, cfg *containerConfig) (*testRun, erro
 		fmt.Printf("Unable to create docker client %v", err)
 		return nil, fmt.Errorf("Unable to create docker client %v", err)
 	}
-	aztr := &testRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "azurestorage", cfg: cfg, cloudVol: true}
+	aztr := &TestRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "azurestorage", cfg: cfg, cloudVol: true}
 	return aztr, nil
 }
 
-func CreateS3Setup(ctx context.Context, cfg *containerConfig) (*testRun, error) {
-	mcfg := &containerConfig{
+func CreateS3Setup(ctx context.Context, cfg *ContainerConfig) (*TestRun, error) {
+	mcfg := &ContainerConfig{
 		containername: "minio",
 		imagename:     "docker.io/minio/minio:latest",
 		hostPort:      "9000",
@@ -355,12 +355,12 @@ func CreateS3Setup(ctx context.Context, cfg *containerConfig) (*testRun, error) 
 	if err != nil {
 		return nil, err
 	}
-	s3tr := &testRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "s3storage", cfg: cfg, cloudVol: true}
+	s3tr := &TestRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "s3storage", cfg: cfg, cloudVol: true}
 	return s3tr, nil
 
 }
 
-func CreateBlockSetup(ctx context.Context, cfg *containerConfig) (*testRun, error) {
+func CreateBlockSetup(ctx context.Context, cfg *ContainerConfig) (*TestRun, error) {
 	cfg.inputEnv = []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "1TB")}
 	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
 	if cfg.attachProfiler {
@@ -379,7 +379,7 @@ func CreateBlockSetup(ctx context.Context, cfg *containerConfig) (*testRun, erro
 	if err != nil {
 		return nil, err
 	}
-	btr := &testRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "blockstorage", cfg: cfg, cloudVol: false}
+	btr := &TestRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "blockstorage", cfg: cfg, cloudVol: false}
 	log.Infof("config=%v", cfg)
 	return btr, nil
 }
