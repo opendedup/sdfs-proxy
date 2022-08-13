@@ -319,7 +319,7 @@ func CreateAzureSetup(ctx context.Context, cfg *ContainerConfig) (*TestRun, erro
 		fmt.Printf("Unable to create docker client %v", err)
 		return nil, fmt.Errorf("Unable to create docker client %v", err)
 	}
-	aztr := &TestRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "azurestorage", cfg: cfg, cloudVol: true}
+	aztr := &TestRun{Url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), Name: "azurestorage", Cfg: cfg, CloudVol: true}
 	return aztr, nil
 }
 
@@ -355,7 +355,7 @@ func CreateS3Setup(ctx context.Context, cfg *ContainerConfig) (*TestRun, error) 
 	if err != nil {
 		return nil, err
 	}
-	s3tr := &TestRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "s3storage", cfg: cfg, cloudVol: true}
+	s3tr := &TestRun{Url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), Name: "s3storage", Cfg: cfg, CloudVol: true}
 	return s3tr, nil
 
 }
@@ -379,7 +379,7 @@ func CreateBlockSetup(ctx context.Context, cfg *ContainerConfig) (*TestRun, erro
 	if err != nil {
 		return nil, err
 	}
-	btr := &TestRun{url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), name: "blockstorage", cfg: cfg, cloudVol: false}
+	btr := &TestRun{Url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), Name: "blockstorage", Cfg: cfg, CloudVol: false}
 	log.Infof("config=%v", cfg)
 	return btr, nil
 }

@@ -21,11 +21,11 @@ const (
 )
 
 func makeFile(ctx context.Context, t *testing.T, c *TestRun, parent string, size int64) (string, []byte) {
-	return makeGenericFile(ctx, t, c.connection, parent, size)
+	return makeGenericFile(ctx, t, c.Connection, parent, size)
 }
 
 func makeLargeBlockFile(ctx context.Context, t *testing.T, c *TestRun, parent string, size int64, blocksize int) (string, []byte) {
-	return makeLargeBlockGenericFile(ctx, t, c.connection, parent, size, blocksize)
+	return makeLargeBlockGenericFile(ctx, t, c.Connection, parent, size, blocksize)
 }
 
 func makeGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConnection, parent string, size int64) (string, []byte) {
@@ -96,13 +96,13 @@ func makeLargeBlockGenericFile(ctx context.Context, t *testing.T, connection *ap
 }
 
 func readFile(ctx context.Context, t *testing.T, c *TestRun, filenm string, delete bool) (data []byte, err error) {
-	stat, err := c.connection.GetAttr(ctx, filenm)
+	stat, err := c.Connection.GetAttr(ctx, filenm)
 	assert.Nil(t, err)
 	if err != nil {
 		return data, err
 	}
 	assert.Greater(t, stat.Size, int64(0))
-	fh, err := c.connection.Open(ctx, filenm, 0)
+	fh, err := c.Connection.Open(ctx, filenm, 0)
 	assert.Nil(t, err)
 	maxoffset := stat.Size
 	offset := int64(0)
@@ -114,19 +114,19 @@ func readFile(ctx context.Context, t *testing.T, c *TestRun, filenm string, dele
 		if readSize > int32(maxoffset-offset) {
 			readSize = int32(maxoffset - offset)
 		}
-		b, err := c.connection.Read(ctx, fh, offset, int32(readSize))
+		b, err := c.Connection.Read(ctx, fh, offset, int32(readSize))
 		h.Write(b)
 		assert.Nil(t, err)
 		offset += int64(len(b))
 		b = nil
 	}
-	err = c.connection.Release(ctx, fh)
+	err = c.Connection.Release(ctx, fh)
 	assert.Nil(t, err)
 
 	if delete {
-		err = c.connection.DeleteFile(ctx, filenm)
+		err = c.Connection.DeleteFile(ctx, filenm)
 		assert.Nil(t, err)
-		_, err = c.connection.GetAttr(ctx, filenm)
+		_, err = c.Connection.GetAttr(ctx, filenm)
 		assert.NotNil(t, err)
 	}
 	bs := h.Sum(nil)
@@ -136,9 +136,9 @@ func readFile(ctx context.Context, t *testing.T, c *TestRun, filenm string, dele
 func deleteFile(t *testing.T, c *TestRun, fn string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	err := c.connection.DeleteFile(ctx, fn)
+	err := c.Connection.DeleteFile(ctx, fn)
 	assert.Nil(t, err)
-	_, err = c.connection.GetAttr(ctx, fn)
+	_, err = c.Connection.GetAttr(ctx, fn)
 	assert.NotNil(t, err)
 }
 
