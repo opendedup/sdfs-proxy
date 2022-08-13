@@ -322,11 +322,11 @@ func BenchmarkWrites(b *testing.B) {
 				if !c.direct {
 					startProxyVolume(trs)
 				}
-				c.connection = benchmarkConnect(b, c)
+				c.connection = BConnect(b, c)
 				cc := 0
 				for c.connection == nil {
 					time.Sleep(15 * time.Second)
-					c.connection = benchmarkConnect(b, c)
+					c.connection = BConnect(b, c)
 					cc++
 					if cc > 5 {
 						b.Errorf("unable to connect to volume")
@@ -431,7 +431,7 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 			}
 			defer f.Close()
 			bt := randBytesMaskImpr(blockSz)
-			connection := benchmarkConnect(b, c)
+			connection := BConnect(b, c)
 			thh := &th{fn: fn, offset: int64(0), bt: bt, connection: connection, f: f}
 			ths = append(ths, thh)
 			if err != nil {
@@ -496,7 +496,7 @@ func parallelBenchmarkWrite(b *testing.B, c *TestRun, blockSize int, fileSize in
 		var ths []*th
 		for z := 0; z < threads; z++ {
 			fn := string(randBytesMaskImpr(16))
-			connection := benchmarkConnect(b, c)
+			connection := BConnect(b, c)
 			connection.MkNod(ctx, fn, 511, 0)
 			connection.GetAttr(ctx, fn)
 			fh, err := connection.Open(ctx, fn, 0)
@@ -569,7 +569,7 @@ func parallelBenchmarkRead(b *testing.B, c *TestRun, blockSize int, fileSize int
 		var ths []*th
 		for z := 0; z < threads; z++ {
 			fn := string(randBytesMaskImpr(16))
-			connection := benchmarkConnect(b, c)
+			connection := BConnect(b, c)
 			connection.MkNod(ctx, fn, 511, 0)
 			connection.GetAttr(ctx, fn)
 			fh, err := connection.Open(ctx, fn, 0)
@@ -686,11 +686,11 @@ func TestMatrix(t *testing.T) {
 
 func testNewProxyConnection(t *testing.T, c *TestRun) {
 	t.Logf("Creating connection for %d\n", c.volume)
-	c.connection = dconnect(t, c)
+	c.connection = Dconnect(t, c)
 	ct := 0
 	for c.connection == nil {
 		time.Sleep(15 * time.Second)
-		c.connection = dconnect(t, c)
+		c.connection = Dconnect(t, c)
 		ct++
 		if ct > 5 {
 			break
@@ -1496,7 +1496,7 @@ func testCloudSync(t *testing.T, c *TestRun) {
 
 	_, err = c.connection.ReloadProxyConfig(ctx)
 	assert.Nil(t, err)
-	connection = connect(t, false, connection.Volumeid)
+	connection = Connect(t, false, connection.Volumeid)
 	assert.NotNil(t, connection)
 	tr.connection = connection
 	defer connection.CloseConnection(ctx)
@@ -1506,7 +1506,7 @@ func testCloudSync(t *testing.T, c *TestRun) {
 	}
 	assert.Nil(t, err)
 	assert.Equal(t, len(portR.ForwardEntrys), len(vis.VolumeInfoResponse))
-	tr.connection = connect(t, tr.clientsidededupe, tr.volume)
+	tr.connection = Connect(t, tr.clientsidededupe, tr.volume)
 	assert.NotNil(t, tr.connection)
 
 	info, err := c.connection.GetVolumeInfo(ctx)
@@ -1588,7 +1588,7 @@ func TestProxyVolumeInfo(t *testing.T) {
 		volumeIds = append(volumeIds, c.volume)
 	}
 
-	connection := connect(t, false, -1)
+	connection := Connect(t, false, -1)
 	vis, err := connection.GetProxyVolumes(ctx)
 	if err != nil {
 		t.Logf("error %v", err)
@@ -1622,7 +1622,7 @@ func TestReloadProxyVolume(t *testing.T) {
 		t.Logf("tr serial = %d", c.volume)
 		volumeIds = append(volumeIds, c.volume)
 	}
-	connection := connect(t, false, -1)
+	connection := Connect(t, false, -1)
 	vis, err := connection.GetProxyVolumes(ctx)
 	assert.Nil(t, err)
 	var vids []int64
@@ -1816,7 +1816,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
+func Connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 
 	//api.DisableTrust = true
 	api.Debug = false
@@ -1869,8 +1869,7 @@ func connect(t *testing.T, dedupe bool, volumeid int64) *api.SdfsConnection {
 	return connection
 }
 
-func benchmarkConnect(b *testing.B, c *TestRun) *api.SdfsConnection {
-
+func BConnect(b *testing.B, c *TestRun) *api.SdfsConnection {
 	//api.DisableTrust = true
 	api.Debug = false
 	api.UserName = "admin"
@@ -1925,7 +1924,7 @@ func benchmarkConnect(b *testing.B, c *TestRun) *api.SdfsConnection {
 	return connection
 }
 
-func dconnect(t *testing.T, c *TestRun) *api.SdfsConnection {
+func Dconnect(t *testing.T, c *TestRun) *api.SdfsConnection {
 
 	//api.DisableTrust = true
 	api.Debug = false
