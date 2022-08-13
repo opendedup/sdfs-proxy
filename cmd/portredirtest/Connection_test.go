@@ -121,7 +121,7 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			}
 			trs := []*TestRun{c}
 			if !c.direct {
-				startProxyVolume(trs)
+				StartProxyVolume(trs)
 			}
 			testNewProxyConnection(t, c)
 			t.Run("testConnection", func(t *testing.T) {
@@ -320,7 +320,7 @@ func BenchmarkWrites(b *testing.B) {
 				}
 				trs := []*TestRun{c}
 				if !c.direct {
-					startProxyVolume(trs)
+					StartProxyVolume(trs)
 				}
 				c.connection = BConnect(b, c)
 				cc := 0
@@ -1582,7 +1582,7 @@ func TestProxyVolumeInfo(t *testing.T) {
 		port++
 		TestRuns = append(TestRuns, tst)
 	}
-	startProxyVolume(TestRuns)
+	StartProxyVolume(TestRuns)
 	var volumeIds []int64
 	for _, c := range TestRuns {
 		volumeIds = append(volumeIds, c.volume)
@@ -1616,7 +1616,7 @@ func TestReloadProxyVolume(t *testing.T) {
 		assert.Nil(t, err)
 		TestRuns = append(TestRuns, tst)
 	}
-	startProxyVolume(TestRuns[1:])
+	StartProxyVolume(TestRuns[1:])
 	var volumeIds []int64
 	for _, c := range TestRuns[1:] {
 		t.Logf("tr serial = %d", c.volume)
@@ -1711,7 +1711,7 @@ func TestReloadProxyVolume(t *testing.T) {
 
 }
 
-func startProxyVolume(tr []*TestRun) {
+func StartProxyVolume(tr []*TestRun) {
 	tls = true
 	api.DisableTrust = true
 	paip.ServerCACert = "out/signer_key.crt"
