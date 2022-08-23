@@ -118,7 +118,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 			os.Exit(12)
 		}
 		server = grpc.NewServer(grpc.Creds(*cc), grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
-			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize))
+			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize), grpc.WriteBufferSize(0), grpc.ReadBufferSize(0))
 	} else {
 		server = grpc.NewServer(grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
 			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize))

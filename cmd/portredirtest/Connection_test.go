@@ -360,9 +360,7 @@ func BenchmarkWrites(b *testing.B) {
 										b.Run("parallelBenchmarkUpload2048", func(b *testing.B) {
 											parallelBenchmarkUpload(b, c, 2048, st.sz, pu.pu, tt)
 										})
-										b.Run("parallelBenchmarkUpload1024", func(b *testing.B) {
-											parallelBenchmarkUpload(b, c, 1024, st.sz, pu.pu, tt)
-										})
+
 									})
 									b.Run(fmt.Sprintf("ReadThreads%d", tt), func(b *testing.B) {
 										//parallel read
@@ -420,6 +418,11 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 	}
 	inv := 100 - percentUnique
 	blockSz := 1024 * 2048
+	cr, err := DockerExec(ctx, c.Cfg.containername, strings.Split("du -sh /opt/sdfs/volumes/.pool0/chunkstore/chunks", " "))
+	if err != nil {
+		b.Errorf("error while execing du %d  %v", cr.ExitCode, err)
+	}
+	log.Infof("storage size = %s\n", strings.Split(cr.outBuffer.String(), "\t")[0])
 	for i := 0; i < b.N; i++ {
 		var ths []*th
 
@@ -461,6 +464,7 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		for z := 0; z < threads; z++ {
 			thh := ths[z]
 			go func() {
+
 				thh.connection.Upload(ctx, thh.fn, thh.fn, blockSize)
 				thh.connection.CloseConnection(ctx)
 				wg.Done()
@@ -469,12 +473,20 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		wg.Wait()
 		b.StopTimer()
 		var sz int64
+		var asz int64
 		for z := 0; z < threads; z++ {
 			sz += ths[z].offset
+			stat, _ := c.Connection.Stat(ctx, ths[z].fn)
+			asz += stat.IoMonitor.ActualBytesWritten
 			c.Connection.Unlink(ctx, ths[z].fn)
 			os.Remove(ths[z].fn)
 		}
 		b.SetBytes(sz)
+		cr, err = DockerExec(ctx, c.Cfg.containername, strings.Split("du -sh /opt/sdfs/volumes/.pool0/chunkstore/chunks", " "))
+		if err != nil {
+			b.Errorf("error while execing du %d  %v", cr.ExitCode, err)
+		}
+		log.Infof("actual bytes written= %d storage size = %s\n", asz, strings.Split(cr.outBuffer.String(), "\t")[0])
 	}
 
 }
@@ -1389,6 +1401,9 @@ func testCloudAutoDownload(t *testing.T, c *TestRun) {
 	defer cancel()
 	fsz := int64(1024 * 1024 * 10)
 	fn, hs := makeFile(ctx, t, c, "", fsz)
+	fi, err := c.Connection.Stat(ctx, fn)
+	assert.Nil(t, err)
+	fl := fi.Size
 	cmd := "chattr -i /opt/sdfs/volumes/.pool0/files/" + fn
 	cr, err := DockerExec(ctx, c.Cfg.containername, strings.Split(cmd, " "))
 	//t.Logf("chattr cmd output %s", cr.outBuffer.String())
@@ -1401,11 +1416,14 @@ func testCloudAutoDownload(t *testing.T, c *TestRun) {
 	//t.Logf("rm err cmd output %s", cr.errBuffer.String())
 	assert.Nil(t, err)
 	assert.Equal(t, 0, cr.ExitCode)
+	_, fls, err := c.Connection.ListDir(ctx, fn, "", false, int32(10))
+	assert.Nil(t, err)
+	assert.Equal(t, fl, fls[0].Size)
 	chs, err := readFile(ctx, t, c, fn, true)
 	assert.Nil(t, err)
 	assert.Equal(t, chs, hs)
 	fn, hs = makeFile(ctx, t, c, "", fsz)
-	fi, err := c.Connection.Stat(ctx, fn)
+	fi, err = c.Connection.Stat(ctx, fn)
 	assert.Nil(t, err)
 	ddbpth := fmt.Sprintf("%s/%s/", fi.MapGuid[:2], fi.MapGuid)
 	cmd = "rm -rf /opt/sdfs/volumes/.pool0/ddb/" + ddbpth
