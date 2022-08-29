@@ -12,4 +12,5 @@ RUN  \
      cd /go/sdfs-proxy && \
      mkdir -p /go/sdfs-proxy/build
 WORKDIR /go/sdfs-proxy/
+RUN go mod tidy
 RUN make clean && make build

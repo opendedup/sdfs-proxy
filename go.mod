@@ -10,7 +10,6 @@ require (
 	github.com/docker/cli v20.10.17+incompatible
 	github.com/docker/docker v20.10.17+incompatible
 	github.com/docker/go-connections v0.4.0
-	github.com/dvsekhvalnov/jose2go v1.5.0
 	github.com/minio/minio-go/v7 v7.0.34
 	github.com/opendedup/sdfs-client-go v0.1.37-0.20220823171810-3b71bed808a5
 	github.com/sevlyar/go-daemon v0.1.5
@@ -92,7 +91,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
-	golang.org/x/perf v0.0.0-20220722155240-3d85ee92886d // indirect
 	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
