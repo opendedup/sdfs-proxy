@@ -35,14 +35,15 @@ import (
 )
 
 type ContainerConfig struct {
-	cpu                                               int64
-	memory                                            int64
-	encrypt                                           bool
-	mountstorage                                      bool
-	imagename, containername, hostPort, containerPort string
-	inputEnv, cmd                                     []string
-	copyFile                                          bool
-	attachProfiler                                    bool
+	cpu                                                   int64
+	memory                                                int64
+	encrypt                                               bool
+	mountstorage                                          bool
+	id, imagename, containername, hostPort, containerPort string
+	inputEnv, cmd                                         []string
+	copyFile                                              bool
+	attachProfiler                                        bool
+	disableMinio                                          bool
 }
 
 type TestRun struct {
@@ -216,6 +217,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 				t.Run("testCloudAutoDownload", func(t *testing.T) {
 					testCloudAutoDownload(t, c)
 				})
+				t.Run("testCloudRecover", func(t *testing.T) {
+					testCloudRecover(t, c)
+				})
 			}
 			c.Connection.CloseConnection(ctx)
 			if !c.Direct {
@@ -337,7 +341,7 @@ func BenchmarkWrites(b *testing.B) {
 						for _, st := range sTest {
 							b.Run(st.name, func(b *testing.B) {
 								for _, tt := range tTest {
-									b.Run(fmt.Sprintf("WriteThreads%d", tt), func(b *testing.B) {
+									b.Run(fmt.Sprintf("%d-WriteThreads", tt), func(b *testing.B) {
 										//parallel write
 										b.Run("parallelBenchmarkUpload32", func(b *testing.B) {
 											parallelBenchmarkUpload(b, c, 32, st.sz, pu.pu, tt)
@@ -1467,37 +1471,94 @@ func testCloudAutoDownload(t *testing.T, c *TestRun) {
 
 }
 
+func testCloudRecover(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	type fhes struct {
+		fn string
+		fh []byte
+	}
+	var fls []fhes
+	fsz := int64(1024 * 1024 * 1024)
+	for i := 0; i < 2; i++ {
+		fn, hs := makeFile(ctx, t, c, "", fsz)
+		fls = append(fls, fhes{fn: fn, fh: hs})
+	}
+	cmd := "rm -rf /opt/sdfs/volumes/.pool0/"
+	cr, err := DockerExec(ctx, c.Cfg.containername, strings.Split(cmd, " "))
+	if err != nil {
+		log.Warnf("rm failed sterr = %s\n", cr.errBuffer.String())
+		log.Warnf("rm failed stout = %s\n", cr.outBuffer.String())
+
+	}
+	assert.Nil(t, err)
+	assert.Equal(t, 0, cr.ExitCode)
+	uf := "resources/docker_run_reload.sh"
+	df := "/usr/share/sdfs/docker_run.sh"
+	err = copyToContainer(ctx, c.Cfg.containername, uf, df)
+	assert.Nil(t, err)
+	cmd = "chmod 777 /usr/share/sdfs/docker_run.sh"
+	cr, err = DockerExec(ctx, c.Cfg.containername, strings.Split(cmd, " "))
+	assert.Nil(t, err)
+	err = RestartContainer(ctx, c.Cfg)
+	assert.Nil(t, err)
+	time.Sleep(240 * time.Second)
+	for _, fs := range fls {
+		dh, err := readFile(ctx, t, c, fs.fn, true)
+		assert.Nil(t, err)
+		assert.Equal(t, dh, fs.fh)
+	}
+}
+
 func testCloudSync(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cfg := c.Cfg
 	cfg.containername = fmt.Sprintf("second-%s", c.Cfg.containername)
 	cfg.containerPort = "6442"
+	cfg.disableMinio = true
 	cfg.hostPort = fmt.Sprintf("2%s", c.Cfg.hostPort)
-	durl := fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort)
-	tr := &TestRun{Url: durl, Name: fmt.Sprintf("second-%s", c.Name), Cfg: cfg, CloudVol: true, Clientsidededupe: c.Clientsidededupe}
+	var tr *TestRun
+	var err error
+	if c.S3 {
+		tr, err = CreateS3Setup(ctx, cfg)
+		if err != nil {
+			t.Errorf("error creating container %v", err)
+		}
+		tr.S3 = true
+		tr.Name = "second S3"
+		tr.CloudVol = true
+	} else {
+		tr, err = CreateAzureSetup(ctx, cfg)
+		if err != nil {
+			t.Errorf("error creating container %v", err)
+		}
+		tr.S3 = true
+		tr.Name = "second Azure"
+		tr.CloudVol = true
+	}
+	tr.Clientsidededupe = c.Clientsidededupe
 	fe := paip.ForwardEntry{
 		Address:       tr.Url,
 		Dedupe:        false,
 		DedupeThreads: 1,
 		DedupeBuffer:  4,
 	}
+	tr.Fe = &fe
 	portR := &paip.PortRedirectors{}
-	maddress := [2]*TestRun{c, tr}
+	maddress := []*TestRun{c, tr}
 
-	for _, c := range maddress {
-		portR.ForwardEntrys = append(portR.ForwardEntrys, *c.Fe)
+	for _, lc := range maddress {
+		portR.ForwardEntrys = append(portR.ForwardEntrys, *lc.Fe)
 	}
-
-	portR.ForwardEntrys = append(portR.ForwardEntrys, fe)
-	connection, err := api.NewConnection(durl, false, true, -1, 0, 0)
+	connection, err := api.NewConnection(tr.Url, false, true, -1, 0, 0)
 	retrys := 0
 	for err != nil {
 		t.Logf("retries = %d\n", retrys)
 		time.Sleep(20 * time.Second)
-		connection, err = api.NewConnection(durl, false, true, -1, 0, 0)
+		connection, err = api.NewConnection(tr.Url, false, true, -1, 0, 0)
 		if retrys > 10 {
-			t.Errorf("SDFS Server connection timed out %s\n", durl)
+			t.Errorf("SDFS Server connection timed out %s\n", tr.Url)
 			os.Exit(-1)
 		} else {
 			retrys++
@@ -1572,8 +1633,10 @@ func testCloudSync(t *testing.T, c *TestRun) {
 	assert.Equal(t, dh, sh)
 	StopAndRemoveContainer(ctx, tr.Cfg.containername)
 	portR = &paip.PortRedirectors{}
-	for _, c := range maddress {
-		portR.ForwardEntrys = append(portR.ForwardEntrys, *c.Fe)
+	maddress = []*TestRun{c}
+
+	for _, lc := range maddress {
+		portR.ForwardEntrys = append(portR.ForwardEntrys, *lc.Fe)
 	}
 	err = ioutil.WriteFile("testpf.json", b, 0644)
 	assert.Nil(t, err)
@@ -1585,7 +1648,6 @@ func testCloudSync(t *testing.T, c *TestRun) {
 	}
 	assert.Nil(t, err)
 	assert.Equal(t, len(portR.ForwardEntrys), len(vis.VolumeInfoResponse))
-
 }
 
 func TestProxyVolumeInfo(t *testing.T) {

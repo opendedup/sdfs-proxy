@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-storage-blob-go/azblob"
 	"github.com/docker/cli/cli/command"
@@ -95,7 +96,28 @@ func copyToContainer(ctx context.Context, container, srcPath, dstPath string) (e
 	return client.CopyToContainer(ctx, container, resolvedDstPath, content, options)
 }
 
+func RestartContainer(ctx context.Context, cfg *ContainerConfig) error {
+	var duration time.Duration = 20 * time.Second
+	client, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer client.Close()
+	client.NegotiateAPIVersion(ctx)
+	err = client.ContainerRestart(ctx, cfg.containername, &duration)
+	if err != nil {
+		fmt.Println("Unable to restart container")
+		return err
+	}
+	go func() {
+		readLogs(client, cfg)
+	}()
+	return nil
+
+}
+
 func RunContainer(ctx context.Context, cfg *ContainerConfig) (string, error) {
+
 	log.Debugf(" config is %v", cfg)
 	client, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -222,48 +244,9 @@ func RunContainer(ctx context.Context, cfg *ContainerConfig) (string, error) {
 		return "", err
 	}
 	log.Debugf("Container %s is created", cont.ID)
+	cfg.id = cont.ID
 	go func() {
-		reader, err := client.ContainerLogs(context.Background(), cont.ID, types.ContainerLogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Follow:     true,
-			Timestamps: false,
-		})
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer reader.Close()
-		path := "logs"
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			err := os.Mkdir(path, os.ModePerm)
-			if err != nil {
-				log.Println(err)
-			}
-		}
-		fn := fmt.Sprintf("logs/%s-%s.log", cfg.containername, cont.ID)
-		f, err := os.Create(fn)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer f.Close()
-		w := bufio.NewWriter(f)
-		scanner := bufio.NewScanner(reader)
-		for scanner.Scan() {
-			p := scanner.Bytes()
-			if len(p) > 8 {
-				_, err := w.WriteString(fmt.Sprintln(string(p[8:])))
-				if err != nil {
-					log.Errorf("unable to write to %s", fn)
-					log.Error(err)
-				}
-				err = w.Flush()
-				if err != nil {
-					log.Errorf("unable to flush to %s", fn)
-					log.Error(err)
-				}
-			}
-		}
-		log.Debugf("exiting reader for %s", fn)
+		readLogs(client, cfg)
 	}()
 
 	if err != nil {
@@ -271,6 +254,50 @@ func RunContainer(ctx context.Context, cfg *ContainerConfig) (string, error) {
 	}
 
 	return cont.ID, nil
+}
+
+func readLogs(client *client.Client, cfg *ContainerConfig) {
+	reader, err := client.ContainerLogs(context.Background(), cfg.id, types.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     true,
+		Timestamps: false,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer reader.Close()
+	path := "logs"
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		err := os.Mkdir(path, os.ModePerm)
+		if err != nil {
+			log.Println(err)
+		}
+	}
+	fn := fmt.Sprintf("logs/%s-%s.log", cfg.containername, cfg.id)
+	f, err := os.Create(fn)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	w := bufio.NewWriter(f)
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		p := scanner.Bytes()
+		if len(p) > 8 {
+			_, err := w.WriteString(fmt.Sprintln(string(p[8:])))
+			if err != nil {
+				log.Errorf("unable to write to %s", fn)
+				log.Error(err)
+			}
+			err = w.Flush()
+			if err != nil {
+				log.Errorf("unable to flush to %s", fn)
+				log.Error(err)
+			}
+		}
+	}
+	log.Debugf("exiting reader for %s", fn)
 }
 
 func CreateAzureSetup(ctx context.Context, cfg *ContainerConfig) (*TestRun, error) {
@@ -324,17 +351,19 @@ func CreateAzureSetup(ctx context.Context, cfg *ContainerConfig) (*TestRun, erro
 }
 
 func CreateS3Setup(ctx context.Context, cfg *ContainerConfig) (*TestRun, error) {
-	mcfg := &ContainerConfig{
-		containername: "minio",
-		imagename:     "docker.io/minio/minio:latest",
-		hostPort:      "9000",
-		containerPort: "9000",
-		inputEnv:      []string{fmt.Sprintf("MINIO_ROOT_USER=%s", "MINIO"), fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", "MINIO1234")},
-		cmd:           []string{"server", "/data"},
-	}
-	_, err := RunContainer(ctx, mcfg)
-	if err != nil {
-		return nil, err
+	if !cfg.disableMinio {
+		mcfg := &ContainerConfig{
+			containername: "minio",
+			imagename:     "docker.io/minio/minio:latest",
+			hostPort:      "9000",
+			containerPort: "9000",
+			inputEnv:      []string{fmt.Sprintf("MINIO_ROOT_USER=%s", "MINIO"), fmt.Sprintf("MINIO_ROOT_PASSWORD=%s", "MINIO1234")},
+			cmd:           []string{"server", "/data"},
+		}
+		_, err := RunContainer(ctx, mcfg)
+		if err != nil {
+			return nil, err
+		}
 	}
 	s3bucket := "pool0"
 	cfg.imagename = sdfsimagename
@@ -351,7 +380,7 @@ func CreateS3Setup(ctx context.Context, cfg *ContainerConfig) (*TestRun, error) 
 	}
 	cfg.cmd = []string{}
 	cfg.copyFile = true
-	_, err = RunContainer(ctx, cfg)
+	_, err := RunContainer(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}

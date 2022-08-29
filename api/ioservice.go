@@ -229,6 +229,24 @@ func (s *FileIOProxy) Chown(ctx context.Context, req *spb.ChownRequest) (*spb.Ch
 	}
 
 }
+
+func (s *FileIOProxy) Chmod(ctx context.Context, req *spb.ChmodRequest) (*spb.ChmodResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	if val, ok := s.fc[volid]; ok {
+		return val.Chmod(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
+
+}
+
 func (s *FileIOProxy) MkDir(ctx context.Context, req *spb.MkDirRequest) (*spb.MkDirResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
@@ -245,6 +263,7 @@ func (s *FileIOProxy) MkDir(ctx context.Context, req *spb.MkDirRequest) (*spb.Mk
 	}
 
 }
+
 func (s *FileIOProxy) RmDir(ctx context.Context, req *spb.RmDirRequest) (*spb.RmDirResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
