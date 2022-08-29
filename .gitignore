@@ -20,4 +20,4 @@ benchoutput.txt
 benchmark.txt*
 bench.sh
 build/sdfs-proxy
-.vscode/targets.log
+.vscode/*
