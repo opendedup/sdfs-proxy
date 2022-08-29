@@ -1,0 +1,41 @@
+#Create a local SDFS Filesystem
+docker run -d --name=sdfsblock -p 0.0.0.0:6442:6442 -e DISABLE_TLS=true -d gcr.io/hybrics/hybrics:dp3
+docker ps
+./sdfscli config --volume --address sdfs://localhost:6442
+./sdfscli file --upload -src sample_data/kba_names.csv -dst kba_names.csv --address sdfs://localhost:6442
+./sdfscli file --list kba_names.csv --address sdfs://localhost:6442
+./sdfscli file --upload -src sample_data/kba_names_mod.csv -dst kba_names_mod.csv --address sdfs://localhost:6442
+./sdfscli file --list . --address sdfs://localhost:6442
+sudo mkdir /media/pool0
+sudo ./mount.sdfs sdfs://localhost:6442 /media/pool0/
+df -h
+sudo chmod 777 /media/pool0/
+ls -lah /media/pool0/
+cat /media/pool0/kba_names.csv
+sudo umount /media/pool0
+#Create a GCS Filesystem
+gsutil mb gs://sdfsdemo2
+docker run --name=sdfsgcs -p 0.0.0.0:6443:6442 -e DISABLE_TLS=true --env BUCKET_NAME=sdfsdemo3 -e GCS_CREDS_FILE=/keys/service_account_key.json -e TYPE=GOOGLE --volume=/opt/sdfs:/opt/sdfs --volume=/home/samsilverberg/git/sdfs-proxy/demo/keys:/keys  -d gcr.io/hybrics/hybrics:localmaster
+docker ps
+sudo ./mount.sdfs sdfs://localhost:6443 /media/pool0/
+df -h
+sudo chmod 777 /media/pool0/
+cp sample_data/IMG-0661.jpg /media/pool0
+cp sample_data/IMG-0661_cpy.jpg /media/pool0
+md5sum sample_data/IMG-0661.jpg
+md5sum /media/pool0/IMG-0661.jpg
+./sdfscli file --list . --address sdfs://localhost:6443
+gsutil ls gs://sdfsdemo2
+
+sudo umount /media/pool0
+docker rm -f sdfsgcs
+docker run --name=sdfsgcs -p 0.0.0.0:6443:6442 -e DISABLE_TLS=true --env BUCKET_NAME=sdfsdemo3 -e GCS_CREDS_FILE=/keys/service_account_key.json -e TYPE=GOOGLE --volume=/opt/sdfs:/opt/sdfs --volume=/home/samsilverberg/git/sdfs-proxy/demo/keys:/keys  -d gcr.io/hybrics/hybrics:localmaster
+docker ps
+sudo ./mount.sdfs sdfs://localhost:6443 /media/pool0/
+df -h
+sudo chmod 777 /media/pool0/
+./sdfscli file --list . --address sdfs://localhost:6443
+md5sum sample_data/IMG-0661.jpg
+md5sum /media/pool0/IMG-0661.jpg
+
+
