@@ -351,7 +351,6 @@ func (s *FileIOProxy) Read(ctx context.Context, req *spb.DataReadRequest) (*spb.
 	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -359,8 +358,10 @@ func (s *FileIOProxy) Read(ctx context.Context, req *spb.DataReadRequest) (*spb.
 		if dval, ok := s.dedupe[volid]; ok {
 			dval.Sync(req.FileHandle, req.PvolumeID)
 		}
+		s.configLock.RUnlock()
 		return val.Read(ctx, req)
 	} else {
+		s.configLock.RUnlock()
 		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
 }
