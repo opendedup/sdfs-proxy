@@ -1478,8 +1478,13 @@ func testCloudRecover(t *testing.T, c *TestRun) {
 		fn string
 		fh []byte
 	}
+	_, err := c.Connection.SetCacheSize(ctx, int64(1)*gb, true)
+	assert.Nil(t, err)
+	dse, err := c.Connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(1)*gb, dse.MaxCacheSize)
 	var fls []fhes
-	fsz := int64(1024 * 1024 * 1024)
+	fsz := int64(1024 * 1024 * 1024 * 3)
 	for i := 0; i < 2; i++ {
 		fn, hs := makeFile(ctx, t, c, "", fsz)
 		fls = append(fls, fhes{fn: fn, fh: hs})
@@ -1508,6 +1513,11 @@ func testCloudRecover(t *testing.T, c *TestRun) {
 		assert.Nil(t, err)
 		assert.Equal(t, dh, fs.fh)
 	}
+	_, err = c.Connection.SetCacheSize(ctx, int64(10)*gb, true)
+	assert.Nil(t, err)
+	dse, err = c.Connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(10)*gb, dse.MaxCacheSize)
 }
 
 func testCloudSync(t *testing.T, c *TestRun) {

@@ -109,10 +109,10 @@ func readFile(ctx context.Context, t *testing.T, c *TestRun, filenm string, dele
 	b := make([]byte, 0)
 	h, err := blake2b.New(32, b)
 	assert.Nil(t, err)
-	readSize := int32(1024 * 1024)
+	readSize := int64(1024 * 1024)
 	for offset < maxoffset {
-		if readSize > int32(maxoffset-offset) {
-			readSize = int32(maxoffset - offset)
+		if readSize > int64(maxoffset-offset) {
+			readSize = int64(maxoffset - offset)
 		}
 		b, err := c.Connection.Read(ctx, fh, offset, int32(readSize))
 		h.Write(b)
