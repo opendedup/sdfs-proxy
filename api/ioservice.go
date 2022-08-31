@@ -346,6 +346,7 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
 }
+
 func (s *FileIOProxy) Read(ctx context.Context, req *spb.DataReadRequest) (*spb.DataReadResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
