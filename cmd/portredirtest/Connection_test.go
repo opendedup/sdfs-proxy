@@ -201,6 +201,15 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			t.Run("testCompression", func(t *testing.T) {
 				testCompression(t, c)
 			})
+			t.Run("testReplicate", func(t *testing.T) {
+				testReplicate(t, c)
+			})
+			t.Run("testReplicatePause", func(t *testing.T) {
+				testReplicatePause(t, c)
+			})
+			t.Run("testReplicateCanceled", func(t *testing.T) {
+				testReplicateCanceled(t, c)
+			})
 			if c.CloudVol {
 				t.Run("testSetRWSpeed", func(t *testing.T) {
 					testSetRWSpeed(t, c)
@@ -826,9 +835,91 @@ func testListDir(t *testing.T, c *TestRun) {
 	assert.NotNil(t, err)
 }
 
+func testReplicate(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := &ContainerConfig{containername: "block-6443", hostPort: "6443", mountstorage: true}
+	//c.Cfg = cfg
+	_c, err := CreateBlockSetup(ctx, cfg)
+	_c.Direct = true
+	_c.Clientsidededupe = false
+	assert.Nil(t, err)
+	testNewProxyConnection(t, _c)
+	assert.NotNil(t, _c.Connection)
+	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
+	fn, hs := makeFile(ctx, t, c, "", 204800)
+	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
+	_, err = _c.Connection.ReplicateRemoteFile(ctx, fn, fn, address, c.Volume, false, true)
+	assert.Nil(t, err)
+	nhs, _ := readFile(ctx, t, _c, fn, false)
+	assert.Equal(t, nhs, hs)
+	_, err = _c.Connection.ReplicateRemoteFile(ctx, fn, fn+"-1", address, c.Volume, false, true)
+	assert.Nil(t, err)
+	nhs, _ = readFile(ctx, t, _c, fn+"-1", false)
+	assert.Equal(t, nhs, hs)
+	_, stats, _ := _c.Connection.ListDir(ctx, fn+"-1", "", false, 1)
+	assert.Equal(t, stats[0].IoMonitor.ActualBytesWritten, int64(0))
+	_c.Connection.DeleteFile(ctx, fn)
+	_c.Connection.DeleteFile(ctx, fn+"-1")
+	c.Connection.DeleteFile(ctx, fn)
+}
+
+func testReplicatePause(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := &ContainerConfig{containername: "block-6443", hostPort: "6443", mountstorage: true}
+	//c.Cfg = cfg
+	_c, err := CreateBlockSetup(ctx, cfg)
+	_c.Direct = true
+	_c.Clientsidededupe = false
+	assert.Nil(t, err)
+	testNewProxyConnection(t, _c)
+	assert.NotNil(t, _c.Connection)
+	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
+	fn, hs := makeFile(ctx, t, c, "", 20480000)
+	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
+	eid, err := _c.Connection.ReplicateRemoteFile(ctx, fn, fn, address, c.Volume, false, false)
+	assert.Nil(t, err)
+	_c.Connection.PauseReplication(ctx, eid.Uuid, true)
+	evt, _ := _c.Connection.GetEvent(ctx, eid.Uuid)
+	assert.Equal(t, evt.Attributes["paused"], "true")
+	_c.Connection.PauseReplication(ctx, eid.Uuid, false)
+	evt, _ = _c.Connection.GetEvent(ctx, eid.Uuid)
+	assert.Equal(t, evt.Attributes["paused"], "false")
+	_c.Connection.WaitForEvent(ctx, evt.Uuid)
+	nhs, _ := readFile(ctx, t, _c, fn, true)
+	assert.Equal(t, nhs, hs)
+	_c.Connection.DeleteFile(ctx, fn)
+	c.Connection.DeleteFile(ctx, fn)
+}
+
+func testReplicateCanceled(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := &ContainerConfig{containername: "block-6443", hostPort: "6443", mountstorage: true}
+	//c.Cfg = cfg
+	_c, err := CreateBlockSetup(ctx, cfg)
+	_c.Direct = true
+	_c.Clientsidededupe = false
+	assert.Nil(t, err)
+	testNewProxyConnection(t, _c)
+	assert.NotNil(t, _c.Connection)
+	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
+	fn, _ := makeFile(ctx, t, c, "", 20480000)
+	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
+	eid, err := _c.Connection.ReplicateRemoteFile(ctx, fn, fn, address, c.Volume, false, false)
+	assert.Nil(t, err)
+	_c.Connection.CancelReplication(ctx, eid.Uuid)
+	evt, _ := _c.Connection.GetEvent(ctx, eid.Uuid)
+	assert.Greater(t, evt.EndTime, int64(0))
+	_, _, err = _c.Connection.ListDir(ctx, fn+"-1", "", false, 1)
+	assert.NotNil(t, err)
+	_c.Connection.DeleteFile(ctx, fn)
+	c.Connection.DeleteFile(ctx, fn)
+}
+
 func testCleanStore(t *testing.T, c *TestRun) {
 	cleanStore(t, c)
-
 }
 
 func testStatFS(t *testing.T, c *TestRun) {

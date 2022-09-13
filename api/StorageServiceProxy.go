@@ -35,6 +35,78 @@ func (s *StorageServiceProxy) HashingInfo(ctx context.Context, req *spb.HashingI
 	}
 }
 
+func (s *StorageServiceProxy) ReplicateRemoteFile(ctx context.Context, req *spb.FileReplicationRequest) (*spb.FileReplicationResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		log.Debugf("Replicating using default volume %d", volid)
+		volid = s.dss
+	}
+	if val, ok := s.dd[volid]; ok {
+		log.Debugf("Replicating using volume %d %d", volid, req.PvolumeID)
+		return val.ReplicateRemoteFile(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
+}
+
+func (s *StorageServiceProxy) RestoreArchives(ctx context.Context, req *spb.RestoreArchivesRequest) (*spb.RestoreArchivesResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		log.Debugf("Retoring using default volume %d", volid)
+		volid = s.dss
+	}
+	if val, ok := s.dd[volid]; ok {
+		log.Debugf("Retoring using volume %d %d", volid, req.PvolumeID)
+		return val.RestoreArchives(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
+}
+
+func (s *StorageServiceProxy) CancelReplication(ctx context.Context, req *spb.CancelReplicationRequest) (*spb.CancelReplicationResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		log.Debugf("Cancel Replication using default volume %d", volid)
+		volid = s.dss
+	}
+	if val, ok := s.dd[volid]; ok {
+		log.Debugf("Cancel Replication using volume %d %d", volid, req.PvolumeID)
+		return val.CancelReplication(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
+}
+
+func (s *StorageServiceProxy) PauseReplication(ctx context.Context, req *spb.PauseReplicationRequest) (*spb.PauseReplicationResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		log.Debugf("Pause Replication using default volume %d", volid)
+		volid = s.dss
+	}
+	if val, ok := s.dd[volid]; ok {
+		log.Debugf("Pause Replication using volume %d %d", volid, req.PvolumeID)
+		return val.PauseReplication(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
+}
+
 func (s *StorageServiceProxy) CheckHashes(ctx context.Context, req *spb.CheckHashesRequest) (*spb.CheckHashesResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
@@ -73,20 +145,34 @@ func (s *StorageServiceProxy) WriteChunks(ctx context.Context, req *spb.WriteChu
 
 }
 
-func (s *StorageServiceProxy) ReadChunks(ctx context.Context, req *spb.ReadChunksRequest) (*spb.ReadChunksResponse, error) {
+func (s *StorageServiceProxy) GetChunks(req *spb.GetChunksRequest, stream spb.StorageService_GetChunksServer) error {
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
 	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Debugf("ReadChunks using default volume %d", volid)
+		log.Debugf("GetChunks using default volume %d", volid)
 		volid = s.dss
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	if val, ok := s.dd[volid]; ok {
-		return val.ReadChunks(ctx, req)
+		fi, err := val.GetChunks(ctx, req)
+		if err != nil {
+			return err
+		}
+		for {
+			fl, err := fi.Recv()
+			if err != nil {
+				return err
+			}
+			if err := stream.Send(fl); err != nil {
+				return err
+			}
+		}
 	} else {
-		return nil, fmt.Errorf("unable to find volume %d", volid)
+		return fmt.Errorf("unable to find volume %d", volid)
 	}
 }
 
@@ -142,7 +228,7 @@ func (s *StorageServiceProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, 
 	return nil
 }
 
-func (s *StorageServiceProxy) GetMetaDataDedupeFile(req *spb.MetaDataDedupeFileRequest, stream spb.StorageService_GetMetaDataDedupeFileServer) error {
+func (s *StorageServiceProxy) GetMetaDataDedupeFile(ctx context.Context, req *spb.MetaDataDedupeFileRequest) (*spb.MetaDataDedupeFileResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
@@ -156,20 +242,11 @@ func (s *StorageServiceProxy) GetMetaDataDedupeFile(req *spb.MetaDataDedupeFileR
 	if val, ok := s.dd[volid]; ok {
 		fi, err := val.GetMetaDataDedupeFile(ctx, req)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		for {
-			fl, err := fi.Recv()
-			if err != nil {
-				return err
-
-			}
-			if err := stream.Send(fl); err != nil {
-				return err
-			}
-		}
+		return fi, nil
 	} else {
-		return fmt.Errorf("unable to find volume %d", volid)
+		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
 }
 

@@ -11,7 +11,7 @@ require (
 	github.com/docker/docker v20.10.17+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/minio/minio-go/v7 v7.0.34
-	github.com/opendedup/sdfs-client-go v0.1.37-0.20220831134558-fe4da092a21c
+	github.com/opendedup/sdfs-client-go v0.1.37-0.20220907004848-3909e3e38f2a
 	github.com/sevlyar/go-daemon v0.1.5
 	github.com/shirou/gopsutil/v3 v3.22.1
 	github.com/sirupsen/logrus v1.9.0
