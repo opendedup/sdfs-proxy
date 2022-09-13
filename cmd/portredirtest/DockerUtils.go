@@ -27,7 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var sdfsimagename = "gcr.io/hybrics/hybrics:dp3"
+var sdfsimagename = "gcr.io/hybrics/hybrics:dp3replication"
 
 func copyToContainer(ctx context.Context, container, srcPath, dstPath string) (err error) {
 	client, err := client.NewClientWithOpts(client.FromEnv)
