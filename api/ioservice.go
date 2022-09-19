@@ -436,6 +436,38 @@ func (s *FileIOProxy) Open(ctx context.Context, req *spb.FileOpenRequest) (*spb.
 	}
 
 }
+
+func (s *FileIOProxy) GetaAllFileInfo(req *spb.FileInfoRequest, stream spb.FileIOService_GetaAllFileInfoServer) error {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.dfc
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if val, ok := s.fc[volid]; ok {
+		fi, err := val.GetaAllFileInfo(ctx, req)
+		if err != nil {
+			return err
+		}
+		for {
+			event, err := fi.Recv()
+			if err != nil {
+				return err
+
+			}
+			if err := stream.Send(event); err != nil {
+				return err
+			}
+		}
+	} else {
+		return fmt.Errorf("unable to find volume %d", volid)
+	}
+}
+
 func (s *FileIOProxy) GetFileInfo(ctx context.Context, req *spb.FileInfoRequest) (*spb.FileMessageResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")

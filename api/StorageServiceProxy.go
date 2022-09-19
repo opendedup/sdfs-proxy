@@ -176,6 +176,73 @@ func (s *StorageServiceProxy) GetChunks(req *spb.GetChunksRequest, stream spb.St
 	}
 }
 
+func (s *StorageServiceProxy) ListReplLogs(req *spb.VolumeEventListenRequest, stream spb.StorageService_ListReplLogsServer) error {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		log.Debugf("GetChunks using default volume %d", volid)
+		volid = s.dss
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if val, ok := s.dd[volid]; ok {
+		fi, err := val.ListReplLogs(ctx, req)
+		if err != nil {
+			return err
+		}
+		for {
+			fl, err := fi.Recv()
+			if err != nil {
+				return err
+			}
+			if err := stream.Send(fl); err != nil {
+				return err
+			}
+		}
+	} else {
+		return fmt.Errorf("unable to find volume %d", volid)
+	}
+}
+
+func (s *StorageServiceProxy) AddReplicaSource(ctx context.Context, req *spb.AddReplicaSourceRequest) (*spb.AddReplicaSourceResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
+		volid = s.dss
+	}
+	if val, ok := s.dd[volid]; ok {
+		log.Debugf("WriteSparseDataChunk using volume %d %d", volid, req.PvolumeID)
+		return val.AddReplicaSource(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
+}
+
+func (s *StorageServiceProxy) RemoveReplicaSource(ctx context.Context, req *spb.RemoveReplicaSourceRequest) (*spb.RemoveReplicaSourceResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
+		volid = s.dss
+	}
+	if val, ok := s.dd[volid]; ok {
+		log.Debugf("WriteSparseDataChunk using volume %d %d", volid, req.PvolumeID)
+		return val.RemoveReplicaSource(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
+}
+
 func (s *StorageServiceProxy) WriteSparseDataChunk(ctx context.Context, req *spb.SparseDedupeChunkWriteRequest) (*spb.SparseDedupeChunkWriteResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
