@@ -438,6 +438,42 @@ func StopAndRemoveContainer(ctx context.Context, containername string) error {
 	return nil
 }
 
+func StopContainer(ctx context.Context, containername string) error {
+	client, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		log.Fatal(err)
+	}
+	client.NegotiateAPIVersion(ctx)
+
+	defer client.Close()
+	log.Debugf("Stopping container %s", containername)
+	if err := client.ContainerStop(ctx, containername, nil); err != nil {
+		log.Errorf("Unable to stop container %s: %s", containername, err)
+		return err
+	}
+	return nil
+}
+
+func StartContainer(ctx context.Context, cfg *ContainerConfig) error {
+	client, err := client.NewClientWithOpts(client.FromEnv)
+	if err != nil {
+		log.Fatal(err)
+	}
+	client.NegotiateAPIVersion(ctx)
+
+	defer client.Close()
+	log.Debugf("Starting container %s", cfg.containername)
+	startOptions := types.ContainerStartOptions{}
+	if err := client.ContainerStart(ctx, cfg.containername, startOptions); err != nil {
+		log.Errorf("Unable to start container %s: %s", cfg.containername, err)
+		return err
+	}
+	go func() {
+		readLogs(client, cfg)
+	}()
+	return nil
+}
+
 type ExecResult struct {
 	ExitCode  int
 	outBuffer *bytes.Buffer
