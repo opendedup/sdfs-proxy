@@ -204,7 +204,11 @@ func (s *FileIOProxy) Flush(ctx context.Context, req *spb.FlushRequest) (*spb.Fl
 		volid = s.dfc
 	}
 	if s.dedupeEnabled[volid].Dedupe {
-		s.dedupe[volid].Sync(req.Fd, volid)
+		err := s.dedupe[volid].Sync(req.Fd, volid)
+		if err != nil {
+			log.Printf("unable to Sync : %v\n", err)
+			return nil, err
+		}
 	}
 	if val, ok := s.fc[volid]; ok {
 		return val.Flush(ctx, req)
@@ -378,7 +382,11 @@ func (s *FileIOProxy) Release(ctx context.Context, req *spb.FileCloseRequest) (*
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.Close(req.FileHandle, req.PvolumeID)
+			err := dval.Close(req.FileHandle, req.PvolumeID)
+			if err != nil {
+				log.Printf("unable to close : %v\n", err)
+				return nil, err
+			}
 		}
 		return val.Release(ctx, req)
 	} else {
@@ -447,7 +455,11 @@ func (s *FileIOProxy) GetFileInfo(ctx context.Context, req *spb.FileInfoRequest)
 	}
 	if val, ok := s.fc[volid]; ok {
 		if dval, ok := s.dedupe[volid]; ok {
-			dval.SyncFile(req.FileName, req.PvolumeID)
+			err := dval.SyncFile(req.FileName, req.PvolumeID)
+			if err != nil {
+				log.Printf("unable to syncfile : %v\n", err)
+				return nil, err
+			}
 		}
 		return val.GetFileInfo(ctx, req)
 	} else {
