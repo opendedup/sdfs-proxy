@@ -147,6 +147,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			t.Run("testCleanStore", func(t *testing.T) {
 				testCleanStore(t, c)
 			})
+			t.Run("testCleanStoreEvent", func(t *testing.T) {
+				testCleanStoreEvent(t, c)
+			})
 			t.Run("testStatFS", func(t *testing.T) {
 				testStatFS(t, c)
 			})
@@ -201,8 +204,8 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			t.Run("testCompression", func(t *testing.T) {
 				testCompression(t, c)
 			})
-			t.Run("testReplicate", func(t *testing.T) {
-				testReplicate(t, c)
+			t.Run("testReplicateFile", func(t *testing.T) {
+				testReplicateFile(t, c)
 			})
 			t.Run("testReplicatePause", func(t *testing.T) {
 				testReplicatePause(t, c)
@@ -215,6 +218,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			})
 			t.Run("testReplicateSyncRestart", func(t *testing.T) {
 				testReplicateSyncRestart(t, c)
+			})
+			t.Run("testReplicateCrashRestart", func(t *testing.T) {
+				testReplicateCrashRestart(t, c)
 			})
 
 			if c.CloudVol {
@@ -842,7 +848,7 @@ func testListDir(t *testing.T, c *TestRun) {
 	assert.NotNil(t, err)
 }
 
-func testReplicate(t *testing.T, c *TestRun) {
+func testReplicateFile(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cfg := &ContainerConfig{containername: "block-6443", hostPort: "6443", mountstorage: true}
@@ -854,7 +860,7 @@ func testReplicate(t *testing.T, c *TestRun) {
 	testNewProxyConnection(t, _c)
 	assert.NotNil(t, _c.Connection)
 	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
-	fn, hs := makeFile(ctx, t, c, "", 204800)
+	fn, hs := makeFile(ctx, t, c, "", 80*1024*1024)
 	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
 	_, err = _c.Connection.ReplicateRemoteFile(ctx, fn, fn, address, c.Volume, false, true)
 	assert.Nil(t, err)
@@ -883,7 +889,7 @@ func testReplicatePause(t *testing.T, c *TestRun) {
 	testNewProxyConnection(t, _c)
 	assert.NotNil(t, _c.Connection)
 	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
-	fn, hs := makeFile(ctx, t, c, "", 20480000)
+	fn, hs := makeFile(ctx, t, c, "", 80*1024*1024)
 	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
 	eid, err := _c.Connection.ReplicateRemoteFile(ctx, fn, fn, address, c.Volume, false, false)
 	assert.Nil(t, err)
@@ -912,7 +918,7 @@ func testReplicateCanceled(t *testing.T, c *TestRun) {
 	testNewProxyConnection(t, _c)
 	assert.NotNil(t, _c.Connection)
 	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
-	fn, _ := makeFile(ctx, t, c, "", 20480000)
+	fn, _ := makeFile(ctx, t, c, "", 80*1024*1024)
 	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
 	eid, err := _c.Connection.ReplicateRemoteFile(ctx, fn, fn, address, c.Volume, false, false)
 	assert.Nil(t, err)
@@ -921,6 +927,46 @@ func testReplicateCanceled(t *testing.T, c *TestRun) {
 	assert.Greater(t, evt.EndTime, int64(0))
 	_, _, err = _c.Connection.ListDir(ctx, fn+"-1", "", false, 1)
 	assert.NotNil(t, err)
+	_c.Connection.DeleteFile(ctx, fn)
+	c.Connection.DeleteFile(ctx, fn)
+}
+
+func testReplicateCrashRestart(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := &ContainerConfig{containername: "block-6443", hostPort: "6443", mountstorage: false}
+	//c.Cfg = cfg
+	_c, err := CreateBlockSetup(ctx, cfg)
+	_c.Direct = true
+	_c.Clientsidededupe = false
+	assert.Nil(t, err)
+	testNewProxyConnection(t, _c)
+	assert.NotNil(t, _c.Connection)
+	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
+	fn, fh := makeFile(ctx, t, c, "", 10*1024*1024*1024)
+	nhs, err := readFile(ctx, t, c, fn, false)
+	assert.Nil(t, err)
+	assert.Equal(t, nhs, fh)
+	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
+	eid, err := _c.Connection.ReplicateRemoteFile(ctx, fn, fn, address, c.Volume, false, false)
+	assert.Nil(t, err)
+	StopContainer(ctx, cfg.containername)
+	StartContainer(ctx, cfg)
+	time.Sleep(120 * time.Second)
+	for i := 1; i < 5; i++ {
+		evt, err := _c.Connection.GetEvent(ctx, eid.Uuid)
+		assert.Nil(t, err)
+		if err != nil {
+			break
+		}
+		if evt.EndTime > 0 {
+			break
+		}
+		time.Sleep(15 * time.Second)
+	}
+	nhs, err = readFile(ctx, t, _c, fn, false)
+	assert.Nil(t, err)
+	assert.Equal(t, nhs, fh)
 	_c.Connection.DeleteFile(ctx, fn)
 	c.Connection.DeleteFile(ctx, fn)
 }
@@ -937,7 +983,7 @@ func testReplicateSync(t *testing.T, c *TestRun) {
 	testNewProxyConnection(t, _c)
 	assert.NotNil(t, _c.Connection)
 	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
-	fn, hs := makeFile(ctx, t, c, "", 20480)
+	fn, hs := makeFile(ctx, t, c, "", 80*1024*1024)
 	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
 	err = _c.Connection.AddReplicationSrc(ctx, address, c.Volume, false)
 	assert.Nil(t, err)
@@ -967,7 +1013,7 @@ func testReplicateSyncRestart(t *testing.T, c *TestRun) {
 		fn string
 		fh []byte
 	}
-	fn, hs := makeFile(ctx, t, c, "", 20480)
+	fn, hs := makeFile(ctx, t, c, "", 80*1024*1024)
 	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
 	err = _c.Connection.AddReplicationSrc(ctx, address, c.Volume, false)
 	assert.Nil(t, err)
@@ -979,15 +1025,24 @@ func testReplicateSyncRestart(t *testing.T, c *TestRun) {
 	time.Sleep(15 * time.Second)
 	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
 	assert.NotNil(t, err)
+	fn, hs = makeFile(ctx, t, c, "", 80*1024*1024)
+	time.Sleep(15 * time.Second)
+	nhs, _ = readFile(ctx, t, _c, fn, false)
+	assert.Equal(t, nhs, hs)
+	c.Connection.DeleteFile(ctx, fn)
+	time.Sleep(15 * time.Second)
+	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
+	assert.NotNil(t, err)
+	time.Sleep(62 * time.Second)
 	StopContainer(ctx, cfg.containername)
 	time.Sleep(15 * time.Second)
 	var files []fileinfo
 	for i := 0; i < 12; i++ {
-		fn, fh := makeFile(ctx, t, c, "", 1024*1024*10)
+		fn, fh := makeFile(ctx, t, c, "", 1024*1024*80)
 		files = append(files, fileinfo{fn: fn, fh: fh})
 	}
 	StartContainer(ctx, cfg)
-	time.Sleep(300 * time.Second)
+	time.Sleep(120 * time.Second)
 	for _, fi := range files {
 		nhs, _ := readFile(ctx, t, _c, fi.fn, false)
 		assert.Equal(t, nhs, fi.fh)
@@ -1471,6 +1526,9 @@ func cleanStore(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var files []string
+	time.Sleep(65 * time.Second)
+	c.Connection.CleanStore(ctx, true, true)
+	time.Sleep(65 * time.Second)
 	for i := 0; i < 12; i++ {
 		fn, _ := makeFile(ctx, t, c, "", 1024*1024*10)
 		files = append(files, fn)
@@ -1494,6 +1552,29 @@ func cleanStore(t *testing.T, c *TestRun) {
 	assert.Nil(t, err)
 	assert.Equal(t, nh, nhn)
 	t.Logf("orig = %d new = %d", sz, nsz)
+	time.Sleep(65 * time.Second)
+	c.Connection.CleanStore(ctx, true, true)
+	time.Sleep(65 * time.Second)
+}
+
+func testCleanStoreEvent(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var files []string
+	for i := 0; i < 12; i++ {
+		fn, _ := makeFile(ctx, t, c, "", 1024*1024*10)
+		files = append(files, fn)
+	}
+	time.Sleep(60 * time.Second)
+	for _, l := range files {
+		c.Connection.DeleteFile(ctx, l)
+	}
+	time.Sleep(65 * time.Second)
+	c.Connection.CleanStore(ctx, true, true)
+	info, err := c.Connection.DSEInfo(ctx)
+	assert.Nil(t, err)
+	elen := int64(1024 * 1024 * 10)
+	assert.LessOrEqual(t, info.CompressedSize, elen)
 }
 
 /*
