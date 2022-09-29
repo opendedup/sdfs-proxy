@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 
@@ -145,6 +146,42 @@ func (s *StorageServiceProxy) WriteChunks(ctx context.Context, req *spb.WriteChu
 
 }
 
+func (s *StorageServiceProxy) SubscribeToVolume(req *spb.VolumeEventListenRequest, stream spb.StorageService_SubscribeToVolumeServer) error {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		log.Debugf("GetChunks using default volume %d", volid)
+		volid = s.dss
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if val, ok := s.dd[volid]; ok {
+		fi, err := val.SubscribeToVolume(ctx, req)
+		if err != nil {
+			return err
+		}
+		for {
+			fl, err := fi.Recv()
+			if err == io.EOF {
+				// we've reached the end of the stream
+				break
+			}
+			if err != nil {
+				return err
+			}
+			if err := stream.Send(fl); err != nil {
+				return err
+			}
+		}
+	} else {
+		return fmt.Errorf("unable to find volume %d", volid)
+	}
+	return nil
+}
+
 func (s *StorageServiceProxy) GetChunks(req *spb.GetChunksRequest, stream spb.StorageService_GetChunksServer) error {
 	log.Debug("in")
 	defer log.Debug("out")
@@ -164,6 +201,10 @@ func (s *StorageServiceProxy) GetChunks(req *spb.GetChunksRequest, stream spb.St
 		}
 		for {
 			fl, err := fi.Recv()
+			if err == io.EOF {
+				// we've reached the end of the stream
+				break
+			}
 			if err != nil {
 				return err
 			}
@@ -174,6 +215,7 @@ func (s *StorageServiceProxy) GetChunks(req *spb.GetChunksRequest, stream spb.St
 	} else {
 		return fmt.Errorf("unable to find volume %d", volid)
 	}
+	return nil
 }
 
 func (s *StorageServiceProxy) ListReplLogs(req *spb.VolumeEventListenRequest, stream spb.StorageService_ListReplLogsServer) error {
@@ -195,6 +237,10 @@ func (s *StorageServiceProxy) ListReplLogs(req *spb.VolumeEventListenRequest, st
 		}
 		for {
 			fl, err := fi.Recv()
+			if err == io.EOF {
+				// we've reached the end of the stream
+				break
+			}
 			if err != nil {
 				return err
 			}
@@ -205,6 +251,7 @@ func (s *StorageServiceProxy) ListReplLogs(req *spb.VolumeEventListenRequest, st
 	} else {
 		return fmt.Errorf("unable to find volume %d", volid)
 	}
+	return nil
 }
 
 func (s *StorageServiceProxy) AddReplicaSource(ctx context.Context, req *spb.AddReplicaSourceRequest) (*spb.AddReplicaSourceResponse, error) {
@@ -335,6 +382,10 @@ func (s *StorageServiceProxy) GetSparseDedupeFile(req *spb.SparseDedupeFileReque
 		}
 		for {
 			fl, err := fi.Recv()
+			if err == io.EOF {
+				// we've reached the end of the stream
+				break
+			}
 			if err != nil {
 				return err
 			}
@@ -342,9 +393,11 @@ func (s *StorageServiceProxy) GetSparseDedupeFile(req *spb.SparseDedupeFileReque
 				return err
 			}
 		}
+
 	} else {
 		return fmt.Errorf("unable to find volume %d", volid)
 	}
+	return nil
 }
 
 func NewStorageService(clnts map[int64]*grpc.ClientConn, proxy, debug bool) *StorageServiceProxy {

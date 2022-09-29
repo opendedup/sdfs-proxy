@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 
@@ -462,18 +463,23 @@ func (s *FileIOProxy) GetaAllFileInfo(req *spb.FileInfoRequest, stream spb.FileI
 			return err
 		}
 		for {
-			event, err := fi.Recv()
+			fl, err := fi.Recv()
+			log.Infof("Listing %v", fl)
+			if err == io.EOF {
+				// we've reached the end of the stream
+				break
+			}
 			if err != nil {
 				return err
-
 			}
-			if err := stream.Send(event); err != nil {
+			if err := stream.Send(fl); err != nil {
 				return err
 			}
 		}
 	} else {
 		return fmt.Errorf("unable to find volume %d", volid)
 	}
+	return nil
 }
 
 func (s *FileIOProxy) GetFileInfo(ctx context.Context, req *spb.FileInfoRequest) (*spb.FileMessageResponse, error) {
