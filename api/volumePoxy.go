@@ -69,7 +69,7 @@ func (s *VolumeProxy) SetMaxAge(ctx context.Context, req *spb.SetMaxAgeRequest) 
 }
 
 func (s *VolumeProxy) GetVolumeInfo(ctx context.Context, req *spb.VolumeInfoRequest) (*spb.VolumeInfoResponse, error) {
-	log.Debug("in")
+	log.Debugf("in %v", req)
 	defer log.Debug("out")
 	volid := req.PvolumeID
 	s.configLock.RLock()
