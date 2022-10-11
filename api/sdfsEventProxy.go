@@ -35,6 +35,22 @@ func (s *SDFSEventProxy) GetEvent(ctx context.Context, req *spb.SDFSEventRequest
 	}
 }
 
+func (s *SDFSEventProxy) GetEvents(ctx context.Context, req *spb.SDFSEventsRequest) (*spb.SDFSEventsResponse, error) {
+	log.Debug("in")
+	defer log.Debug("out")
+	volid := req.PvolumeID
+	s.configLock.RLock()
+	defer s.configLock.RUnlock()
+	if s.proxy || volid == 0 || volid == -1 {
+		volid = s.devt
+	}
+	if val, ok := s.evt[volid]; ok {
+		return val.GetEvents(ctx, req)
+	} else {
+		return nil, fmt.Errorf("unable to find volume %d", volid)
+	}
+}
+
 func (s *SDFSEventProxy) ListEvents(ctx context.Context, req *spb.SDFSEventListRequest) (*spb.SDFSEventListResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
