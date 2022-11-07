@@ -91,11 +91,11 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 			os.Exit(9)
 		}
 		for i := sp; i < ep+1; i++ {
-			lis, err = net.Listen("tcp", fmt.Sprintf("%s:%d", ps[0], i))
+			lis, err = net.Listen("tcp", fmt.Sprintf("%s:%d", "0.0.0.0", i))
 			if err != nil {
 				log.Warnf("failed to listen on %d : %v", i, err)
 			} else {
-				port = fmt.Sprintf("%s:%d", ps[0], i)
+				port = fmt.Sprintf("%s:%d", "0.0.0.0", i)
 				break
 			}
 			if i == ep {
@@ -104,7 +104,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 			}
 		}
 	} else {
-		lis, err = net.Listen("tcp", port)
+		lis, err = net.Listen("tcp", fmt.Sprintf("%s:%s", "0.0.0.0", ps[1]))
 		if err != nil {
 			log.Errorf("failed to listen: %v", err)
 			os.Exit(-11)
@@ -122,7 +122,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 		)
 	} else {
 		server = grpc.NewServer(grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
-			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize),
+			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize), grpc.WriteBufferSize(0), grpc.ReadBufferSize(0),
 		)
 	}
 
