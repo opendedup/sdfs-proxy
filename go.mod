@@ -2,7 +2,7 @@ module github.com/opendedup/sdfs-proxy
 
 go 1.18
 
-replace github.com/opendedup/sdfs-client-go => /home/samsilverberg/git/sdfs-client-go
+//replace github.com/opendedup/sdfs-client-go => /home/samsilverberg/git/sdfs-client-go
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.15.0
