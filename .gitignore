@@ -21,3 +21,4 @@ benchmark.txt*
 bench.sh
 build/sdfs-proxy
 .vscode/*
+.vscode/dryrun.log
