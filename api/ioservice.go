@@ -11,6 +11,7 @@ import (
 
 	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	pool "github.com/processout/grpc-go-pool"
 	"google.golang.org/grpc"
 )
 
@@ -681,7 +682,7 @@ func (s *FileIOProxy) StatFS(ctx context.Context, req *spb.StatFSRequest) (*spb.
 
 }
 
-func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]ForwardEntry, debug bool) error {
+func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, pclnts map[int64]*pool.Pool, dedupeEnabled map[int64]ForwardEntry, debug bool) error {
 	log.Debug("in")
 	defer log.Debug("out")
 	s.configLock.Lock()
@@ -694,8 +695,9 @@ func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 		fcm[indx] = vc
 		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
+			p := pclnts[indx]
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
+			de, err := dedupe.NewDedupeEngine(ctx, p, 4, 8, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
 			if err != nil {
 				log.Printf("error initializing dedupe connection: %v\n", err)
 				return err
@@ -768,7 +770,7 @@ func (s *FileIOProxy) GetRetrievalTier(ctx context.Context, req *spb.GetRetrieva
 
 }
 
-func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]ForwardEntry, proxy, debug bool) (*FileIOProxy, error) {
+func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, pclnts map[int64]*pool.Pool, dedupeEnabled map[int64]ForwardEntry, proxy, debug bool) (*FileIOProxy, error) {
 	fcm := make(map[int64]spb.FileIOServiceClient)
 	dd := make(map[int64]*dedupe.DedupeEngine)
 	if debug {
@@ -783,7 +785,7 @@ func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]Fo
 		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, dedupeEnabled[indx].DedupeBuffer, dedupeEnabled[indx].DedupeThreads, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
+			de, err := dedupe.NewDedupeEngine(ctx, pclnts[indx], dedupeEnabled[indx].DedupeBuffer, dedupeEnabled[indx].DedupeThreads, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
 			if err != nil {
 				log.Errorf("error initializing dedupe connection: %v\n", err)
 				return nil, err

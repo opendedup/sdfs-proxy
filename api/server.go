@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	pool "github.com/processout/grpc-go-pool"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/dgrijalva/jwt-go"
@@ -42,7 +43,7 @@ var serverConfigLock sync.RWMutex
 var remoteTLS bool
 var ecc []sdfs.EncryptionServiceClient
 
-func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor, remoteServerCert bool) {
+func StartServer(Connections map[int64]*grpc.ClientConn, pclnts map[int64]*pool.Pool, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor, remoteServerCert bool) {
 	log.Debug("in")
 	defer log.Debug("out")
 	password = pwd
@@ -52,7 +53,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	}
 	log.SetOutput(os.Stdout)
 	log.SetReportCaller(true)
-	fc, err := NewFileIOProxy(Connections, dedupe, proxy, debug)
+	fc, err := NewFileIOProxy(Connections, pclnts, dedupe, proxy, debug)
 	if err != nil {
 		log.Errorf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
 		os.Exit(7)

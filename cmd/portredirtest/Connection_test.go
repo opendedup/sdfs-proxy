@@ -29,6 +29,7 @@ import (
 	api "github.com/opendedup/sdfs-client-go/api"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	paip "github.com/opendedup/sdfs-proxy/api"
+	pool "github.com/processout/grpc-go-pool"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2b"
 	"google.golang.org/grpc"
@@ -1317,6 +1318,11 @@ func testReplicateSync(t *testing.T, c *TestRun) {
 	time.Sleep(15 * time.Second)
 	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
 	assert.NotNil(t, err)
+	cmd := "cat /etc/sdfs/pool0-volume-cfg.xml"
+	time.Sleep(120 * time.Second)
+	eout, _ := DockerExec(ctx, cfg.containername, strings.Split(cmd, " "))
+	log.Infof("!!!!!!!!!!!!!!!!! out = %v", eout.outBuffer.String())
+	log.Infof("!!!!!!!!!!!!!!!!! err = %v", eout.errBuffer.String())
 }
 
 func testReplicateSyncAddRemoveAdd(t *testing.T, c *TestRun) {
@@ -1450,14 +1456,25 @@ func testReplicateSyncRestart(t *testing.T, c *TestRun) {
 	var files []fileinfo
 	for i := 0; i < 12; i++ {
 		fn, fh := makeFile(ctx, t, c, "", 1024*1024*80)
+		log.Infof("fn %s" + fn)
 		files = append(files, fileinfo{fn: fn, fh: fh})
 	}
+
 	StartContainer(ctx, cfg)
-	time.Sleep(120 * time.Second)
+	time.Sleep(3 * time.Minute)
 	for _, fi := range files {
+		_, _, err = c.Connection.ListDir(ctx, fi.fn, "", false, 1)
+		assert.Nil(t, err)
+	}
+	for _, fi := range files {
+		log.Infof("nfn %s" + fi.fn)
 		nhs, _ := readFile(ctx, t, _c, fi.fn, false)
 		assert.Equal(t, nhs, fi.fh)
 	}
+	cmd := "cat /etc/sdfs/pool0-volume-cfg.xml"
+	eout, _ := DockerExec(ctx, cfg.containername, strings.Split(cmd, " "))
+	log.Infof("!!!!!!!!!!!!!!!!! out = %v", eout.outBuffer.String())
+	log.Infof("!!!!!!!!!!!!!!!!! err = %v", eout.errBuffer.String())
 }
 
 func testCleanStore(t *testing.T, c *TestRun) {
@@ -2477,6 +2494,7 @@ func StartProxyVolume(tr []*TestRun) {
 
 	cmp := make(map[int64]*grpc.ClientConn)
 	dd := make(map[int64]paip.ForwardEntry)
+	pcmp := make(map[int64]*pool.Pool)
 	portR := &paip.PortRedirectors{}
 	for _, m := range tr {
 		fe := paip.ForwardEntry{Address: m.Url}
@@ -2500,6 +2518,8 @@ func StartProxyVolume(tr []*TestRun) {
 		log.Debugf("connected to volume = %d for %s", connection.Volumeid, m.Cfg.containername)
 		m.Volume = connection.Volumeid
 		cmp[connection.Volumeid] = connection.Clnt
+
+		pcmp[connection.Volumeid] = connection.Cp
 		fe = paip.ForwardEntry{
 			Address:       m.Url,
 			Dedupe:        false,
@@ -2523,12 +2543,13 @@ func StartProxyVolume(tr []*TestRun) {
 	}
 	pf := paip.NewPortRedirector("testpf.json", lport, false, nil, false)
 	pf.Cmp = cmp
+
 	pf.Dd = dd
 	paip.ServerMtls = true
 	paip.AnyCert = true
 	mtls = true
 
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
+	go paip.StartServer(cmp, pcmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 
 }
