@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/opendedup/sdfs-client-go/api"
 	"github.com/opendedup/sdfs-proxy/api"
+	pool "github.com/processout/grpc-go-pool"
 	"github.com/sevlyar/go-daemon"
 )
 
@@ -151,7 +152,9 @@ func main() {
 			}
 			defer mcntxt.Release()
 			cmp := make(map[int64]*grpc.ClientConn)
+			pcmp := make(map[int64]*pool.Pool)
 			cmp[Connection.Volumeid] = Connection.Clnt
+			pcmp[Connection.Volumeid] = Connection.Cp
 			dd := make(map[int64]api.ForwardEntry)
 			dd[Connection.Volumeid] = api.ForwardEntry{
 				Address:       *address,
@@ -168,10 +171,12 @@ func main() {
 				os.Exit(5)
 			}
 			pf := api.NewPortRedirector("filepath", "port", true, con.Clnt, *debug)
-			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, pf, false)
+			api.StartServer(cmp, pcmp, *port, enableAuth, dd, true, *debug, *lpwd, pf, false)
 		} else {
 			cmp := make(map[int64]*grpc.ClientConn)
+			pcmp := make(map[int64]*pool.Pool)
 			cmp[Connection.Volumeid] = Connection.Clnt
+			pcmp[Connection.Volumeid] = Connection.Cp
 			dd := make(map[int64]api.ForwardEntry)
 			dd[Connection.Volumeid] = api.ForwardEntry{
 				Address:       *address,
@@ -186,7 +191,7 @@ func main() {
 				os.Exit(3)
 			}
 			pf := api.NewPortRedirector("filepath", "port", true, con.Clnt, *debug)
-			api.StartServer(cmp, *port, enableAuth, dd, true, *debug, *lpwd, pf, false)
+			api.StartServer(cmp, pcmp, *port, enableAuth, dd, true, *debug, *lpwd, pf, false)
 		}
 	}
 }
