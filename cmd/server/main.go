@@ -49,7 +49,11 @@ func main() {
 	buffers := flag.Int("dedupe-buffers", 4, "number of local cache buffers for dedupe")
 	threads := flag.Int("dedupe-threads", 4, "number of threads used for dedupe")
 	pfConfig := flag.String("pf-config", "", "The location of the Port forward Config")
-	logPath := flag.String("log-path", "/var/log/sdfs/", "Base Path for logs")
+	lpth := "/var/log/sdfs/"
+	if runtime.GOOS == "windows" {
+		lpth = "c:/temp/sdfs/"
+	}
+	logPath := flag.String("log-path", lpth, "Base Path for logs")
 	cachsize := flag.Int("dedupe-cache-size", 1000000, "Cache size for client size dedupe")
 	cachage := flag.Int("dedupe-cache-age", 30, "Maximum age for local dedupe cache")
 	flag.Parse()
@@ -61,7 +65,12 @@ func main() {
 		fmt.Printf("Build Date: %s\n", BuildDate)
 		os.Exit(0)
 	}
-
+	f, err := os.OpenFile(fmt.Sprintf("%s/%s", *logPath, "sdfs-proxy.log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Println("Failed to create logfile" + fmt.Sprintf("%s/%s", *logPath, "sdfs-proxy.log"))
+		panic(err)
+	}
+	log.SetOutput(f)
 	if *trustCert {
 		err := pb.AddTrustedCert(*address)
 		if err != nil {

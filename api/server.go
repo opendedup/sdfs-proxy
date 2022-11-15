@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/user"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -51,7 +52,17 @@ func StartServer(Connections map[int64]*grpc.ClientConn, pclnts map[int64]*pool.
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
-	log.SetOutput(os.Stdout)
+	if runtime.GOOS == "windows" {
+		lpth := "c:/temp/sdfs/"
+		f, err := os.OpenFile(fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Failed to create logfile" + fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"))
+			panic(err)
+		}
+		log.SetOutput(f)
+	} else {
+		log.SetOutput(os.Stdout)
+	}
 	log.SetReportCaller(true)
 	fc, err := NewFileIOProxy(Connections, pclnts, dedupe, proxy, debug)
 	if err != nil {
