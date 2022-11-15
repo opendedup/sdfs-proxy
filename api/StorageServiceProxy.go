@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
+	"runtime"
 
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	log "github.com/sirupsen/logrus"
@@ -14,18 +14,15 @@ import (
 
 type StorageServiceProxy struct {
 	spb.UnimplementedStorageServiceServer
-	dd         map[int64]spb.StorageServiceClient
-	dss        int64
-	proxy      bool
-	configLock sync.RWMutex
+	dd    map[int64]spb.StorageServiceClient
+	dss   int64
+	proxy bool
 }
 
 func (s *StorageServiceProxy) HashingInfo(ctx context.Context, req *spb.HashingInfoRequest) (*spb.HashingInfoResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dss
 	}
@@ -40,8 +37,6 @@ func (s *StorageServiceProxy) ReplicateRemoteFile(ctx context.Context, req *spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("Replicating using default volume %d", volid)
 		volid = s.dss
@@ -58,8 +53,6 @@ func (s *StorageServiceProxy) RestoreArchives(ctx context.Context, req *spb.Rest
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("Retoring using default volume %d", volid)
 		volid = s.dss
@@ -76,8 +69,6 @@ func (s *StorageServiceProxy) CancelReplication(ctx context.Context, req *spb.Ca
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("Cancel Replication using default volume %d", volid)
 		volid = s.dss
@@ -94,8 +85,6 @@ func (s *StorageServiceProxy) PauseReplication(ctx context.Context, req *spb.Pau
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("Pause Replication using default volume %d", volid)
 		volid = s.dss
@@ -112,8 +101,6 @@ func (s *StorageServiceProxy) CheckHashes(ctx context.Context, req *spb.CheckHas
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("CheckHashes using default volume %d", volid)
 		volid = s.dss
@@ -131,8 +118,6 @@ func (s *StorageServiceProxy) WriteChunks(ctx context.Context, req *spb.WriteChu
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("WriteChunks using default volume %d", volid)
 		volid = s.dss
@@ -150,10 +135,8 @@ func (s *StorageServiceProxy) SubscribeToVolume(req *spb.VolumeEventListenReques
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Debugf("GetChunks using default volume %d", volid)
+		log.Debugf("SubscribeToVolume using default volume %d", volid)
 		volid = s.dss
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -186,8 +169,6 @@ func (s *StorageServiceProxy) GetChunks(req *spb.GetChunksRequest, stream spb.St
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("GetChunks using default volume %d", volid)
 		volid = s.dss
@@ -222,10 +203,8 @@ func (s *StorageServiceProxy) ListReplLogs(req *spb.VolumeEventListenRequest, st
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Debugf("GetChunks using default volume %d", volid)
+		log.Debugf("ListReplLogs using default volume %d", volid)
 		volid = s.dss
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -258,14 +237,12 @@ func (s *StorageServiceProxy) AddReplicaSource(ctx context.Context, req *spb.Add
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
+		log.Debugf("AddReplicaSource using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
-		log.Debugf("WriteSparseDataChunk using volume %d %d", volid, req.PvolumeID)
+		log.Debugf("AddReplicaSource using volume %d %d", volid, req.PvolumeID)
 		return val.AddReplicaSource(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
@@ -276,14 +253,12 @@ func (s *StorageServiceProxy) RemoveReplicaSource(ctx context.Context, req *spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
+		log.Debugf("RemoveReplicaSource using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
-		log.Debugf("WriteSparseDataChunk using volume %d %d", volid, req.PvolumeID)
+		log.Debugf("RemoveReplicaSource using volume %d %d", volid, req.PvolumeID)
 		return val.RemoveReplicaSource(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
@@ -294,8 +269,6 @@ func (s *StorageServiceProxy) WriteSparseDataChunk(ctx context.Context, req *spb
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
 		volid = s.dss
@@ -312,8 +285,6 @@ func (s *StorageServiceProxy) ReadSparseDataChunk(ctx context.Context, req *spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("ReadSparseDataChunk using default volume %d", volid)
 		volid = s.dss
@@ -328,17 +299,28 @@ func (s *StorageServiceProxy) ReadSparseDataChunk(ctx context.Context, req *spb.
 func (s *StorageServiceProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, debug bool) error {
 	log.Debug("in")
 	defer log.Debug("out")
-	s.configLock.Lock()
-	defer s.configLock.Unlock()
+	//s.configLock.Lock()
+	//defer s.configLock.Unlock()
+	log.Debug("1")
 	vcm := make(map[int64]spb.StorageServiceClient)
+	log.Debug("2")
 	var defaultVolume int64
+	log.Debug("3")
 	for indx, clnt := range clnts {
+		log.Debug("4-1")
 		evt := spb.NewStorageServiceClient(clnt)
+		log.Debug("4-2")
 		vcm[indx] = evt
+		log.Debug("4-3")
 		defaultVolume = indx
+		log.Debug("4-4")
 	}
+	log.Debug("5")
 	s.dd = vcm
+	log.Debug("6")
 	s.dss = defaultVolume
+	log.Debug("7")
+
 	return nil
 }
 
@@ -346,8 +328,6 @@ func (s *StorageServiceProxy) GetMetaDataDedupeFile(ctx context.Context, req *sp
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dss
 	}
@@ -368,8 +348,6 @@ func (s *StorageServiceProxy) GetSparseDedupeFile(req *spb.SparseDedupeFileReque
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dss
 	}
@@ -404,8 +382,18 @@ func NewStorageService(clnts map[int64]*grpc.ClientConn, proxy, debug bool) *Sto
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
+	if runtime.GOOS == "windows" {
+		lpth := "c:/temp/sdfs/"
+		f, err := os.OpenFile(fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Failed to create logfile" + fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"))
+			panic(err)
+		}
+		log.SetOutput(f)
+	} else {
+		log.SetOutput(os.Stdout)
+	}
 	log.SetReportCaller(true)
-	log.SetOutput(os.Stdout)
 	vcm := make(map[int64]spb.StorageServiceClient)
 	var defaultVolume int64
 	for indx, clnt := range clnts {

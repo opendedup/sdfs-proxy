@@ -20,6 +20,8 @@ require (
 	google.golang.org/grpc v1.40.1
 )
 
+require github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
+
 require (
 	github.com/Azure/azure-pipeline-go v0.2.3 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
@@ -82,6 +84,7 @@ require (
 	github.com/prometheus/common v0.14.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
 	github.com/rs/xid v1.4.0 // indirect
+	github.com/sasha-s/go-deadlock v0.3.1
 	github.com/secure-io/sio-go v0.3.1 // indirect
 	github.com/spf13/cobra v1.0.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
