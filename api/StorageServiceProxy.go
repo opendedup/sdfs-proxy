@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	log "github.com/sirupsen/logrus"
@@ -14,18 +13,15 @@ import (
 
 type StorageServiceProxy struct {
 	spb.UnimplementedStorageServiceServer
-	dd         map[int64]spb.StorageServiceClient
-	dss        int64
-	proxy      bool
-	configLock sync.RWMutex
+	dd    map[int64]spb.StorageServiceClient
+	dss   int64
+	proxy bool
 }
 
 func (s *StorageServiceProxy) HashingInfo(ctx context.Context, req *spb.HashingInfoRequest) (*spb.HashingInfoResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dss
 	}
@@ -40,8 +36,6 @@ func (s *StorageServiceProxy) ReplicateRemoteFile(ctx context.Context, req *spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("Replicating using default volume %d", volid)
 		volid = s.dss
@@ -58,8 +52,6 @@ func (s *StorageServiceProxy) RestoreArchives(ctx context.Context, req *spb.Rest
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("Retoring using default volume %d", volid)
 		volid = s.dss
@@ -76,8 +68,6 @@ func (s *StorageServiceProxy) CancelReplication(ctx context.Context, req *spb.Ca
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("Cancel Replication using default volume %d", volid)
 		volid = s.dss
@@ -94,8 +84,6 @@ func (s *StorageServiceProxy) PauseReplication(ctx context.Context, req *spb.Pau
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("Pause Replication using default volume %d", volid)
 		volid = s.dss
@@ -112,8 +100,6 @@ func (s *StorageServiceProxy) CheckHashes(ctx context.Context, req *spb.CheckHas
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("CheckHashes using default volume %d", volid)
 		volid = s.dss
@@ -131,8 +117,6 @@ func (s *StorageServiceProxy) WriteChunks(ctx context.Context, req *spb.WriteChu
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("WriteChunks using default volume %d", volid)
 		volid = s.dss
@@ -150,8 +134,6 @@ func (s *StorageServiceProxy) SubscribeToVolume(req *spb.VolumeEventListenReques
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("GetChunks using default volume %d", volid)
 		volid = s.dss
@@ -186,8 +168,6 @@ func (s *StorageServiceProxy) GetChunks(req *spb.GetChunksRequest, stream spb.St
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("GetChunks using default volume %d", volid)
 		volid = s.dss
@@ -222,8 +202,7 @@ func (s *StorageServiceProxy) ListReplLogs(req *spb.VolumeEventListenRequest, st
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("GetChunks using default volume %d", volid)
 		volid = s.dss
@@ -258,8 +237,7 @@ func (s *StorageServiceProxy) AddReplicaSource(ctx context.Context, req *spb.Add
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
 		volid = s.dss
@@ -276,8 +254,7 @@ func (s *StorageServiceProxy) RemoveReplicaSource(ctx context.Context, req *spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
 		volid = s.dss
@@ -294,8 +271,7 @@ func (s *StorageServiceProxy) WriteSparseDataChunk(ctx context.Context, req *spb
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
 		volid = s.dss
@@ -312,8 +288,7 @@ func (s *StorageServiceProxy) ReadSparseDataChunk(ctx context.Context, req *spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("ReadSparseDataChunk using default volume %d", volid)
 		volid = s.dss
@@ -328,8 +303,6 @@ func (s *StorageServiceProxy) ReadSparseDataChunk(ctx context.Context, req *spb.
 func (s *StorageServiceProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, debug bool) error {
 	log.Debug("in")
 	defer log.Debug("out")
-	s.configLock.Lock()
-	defer s.configLock.Unlock()
 	vcm := make(map[int64]spb.StorageServiceClient)
 	var defaultVolume int64
 	for indx, clnt := range clnts {
@@ -346,8 +319,7 @@ func (s *StorageServiceProxy) GetMetaDataDedupeFile(ctx context.Context, req *sp
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dss
 	}
@@ -368,8 +340,7 @@ func (s *StorageServiceProxy) GetSparseDedupeFile(req *spb.SparseDedupeFileReque
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dss
 	}
