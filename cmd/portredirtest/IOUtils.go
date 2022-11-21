@@ -24,6 +24,10 @@ func makeFile(ctx context.Context, t *testing.T, c *TestRun, parent string, size
 	return makeGenericFile(ctx, t, c.Connection, parent, size)
 }
 
+func makeFileOffset(ctx context.Context, t *testing.T, c *TestRun, fn string, size, offset int64) (string, []byte) {
+	return makeGenericFileOffset(ctx, t, c.Connection, fn, size, offset)
+}
+
 func makeLargeBlockFile(ctx context.Context, t *testing.T, c *TestRun, parent string, size int64, blocksize int) (string, []byte) {
 	return makeLargeBlockGenericFile(ctx, t, c.Connection, parent, size, blocksize)
 }
@@ -32,6 +36,10 @@ func makeGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConn
 	fn := fmt.Sprintf("%s/%s", parent, string(randBytesMaskImpr(16)))
 	err := connection.MkNod(ctx, fn, 511, 0)
 	assert.Nil(t, err)
+	return makeGenericFileOffset(ctx, t, connection, fn, size, int64(0))
+}
+
+func makeGenericFileOffset(ctx context.Context, t *testing.T, connection *api.SdfsConnection, fn string, size int64, offset int64) (string, []byte) {
 	stat, err := connection.GetAttr(ctx, fn)
 	assert.Nil(t, err)
 	var h hash.Hash
@@ -39,7 +47,6 @@ func makeGenericFile(ctx context.Context, t *testing.T, connection *api.SdfsConn
 	fh, err := connection.Open(ctx, fn, 0)
 	assert.Nil(t, err)
 	maxoffset := size
-	offset := int64(0)
 	h, err = blake2b.New(32, make([]byte, 0))
 	assert.Nil(t, err)
 	blockSz := 1024 * 32
@@ -101,11 +108,19 @@ func readFile(ctx context.Context, t *testing.T, c *TestRun, filenm string, dele
 	if err != nil {
 		return data, err
 	}
+	return readFileOffset(ctx, t, c, filenm, int64(0), stat.Size, delete)
+}
+
+func readFileOffset(ctx context.Context, t *testing.T, c *TestRun, filenm string, offset, length int64, delete bool) (data []byte, err error) {
+	stat, err := c.Connection.GetAttr(ctx, filenm)
+	assert.Nil(t, err)
+	if err != nil {
+		return data, err
+	}
 	assert.Greater(t, stat.Size, int64(0))
 	fh, err := c.Connection.Open(ctx, filenm, 0)
 	assert.Nil(t, err)
-	maxoffset := stat.Size
-	offset := int64(0)
+	maxoffset := length
 	b := make([]byte, 0)
 	h, err := blake2b.New(32, b)
 	assert.Nil(t, err)
