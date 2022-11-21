@@ -651,8 +651,8 @@ github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417/go.m
 github.com/opencontainers/selinux v1.8.2/go.mod h1:MUIHuUEvKB1wtJjQdOyYRgOnLD2xAPP8dBsCoU0KuF8=
 github.com/opendedup/go-rabin v0.0.0-20210502160858-b8d2d864c5c0 h1:uWbYeQjg6kidV0WKaSD/6yrBEd95MgYyXqXefg7Tb3w=
 github.com/opendedup/go-rabin v0.0.0-20210502160858-b8d2d864c5c0/go.mod h1:NejntDY71bxJaxqaZtRLmHc0nXq+ghnaoLXU4t9Y020=
-github.com/opendedup/sdfs-client-go v0.1.37-0.20221107015048-ec5c3939c1ce h1:qArA16M1J5k01lbTOIBwXiGmOsJ8BaShVUSDSLaSA1c=
-github.com/opendedup/sdfs-client-go v0.1.37-0.20221107015048-ec5c3939c1ce/go.mod h1:4ivas27RXGfqFz0kcQmfoAgcEroGB98/kcjYbI5ZXk0=
+github.com/opendedup/sdfs-client-go v0.1.37-0.20221121024544-949be8d30a2d h1:0iH74ZsKv8iPgZEV6Msj7g4jU5YGgqd21xp7a8Swsp0=
+github.com/opendedup/sdfs-client-go v0.1.37-0.20221121024544-949be8d30a2d/go.mod h1:4ivas27RXGfqFz0kcQmfoAgcEroGB98/kcjYbI5ZXk0=
 github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492/go.mod h1:Ngi6UdF0k5OKD5t5wlmGhe/EDKPoUM3BXZSSfIuJbis=
 github.com/opentracing/basictracer-go v1.0.0/go.mod h1:QfBfYuafItcjQuMwinw9GhYKwFXS9KnPs5lxoYwgW74=
 github.com/opentracing/opentracing-go v1.0.2/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
