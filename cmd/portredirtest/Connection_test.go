@@ -223,8 +223,8 @@ func runMatix(t *testing.T, testType string, tests []string) {
 				testReplicateCanceledErrors(t, c)
 			})
 
-			t.Run("testReplicateSync", func(t *testing.T) {
-				testReplicateSync(t, c)
+			t.Run("testReplicateSyncFile", func(t *testing.T) {
+				testReplicateSyncFile(t, c)
 			})
 			t.Run("testReplicateSyncRestart", func(t *testing.T) {
 				testReplicateSyncRestart(t, c)
@@ -942,6 +942,7 @@ func testReplicateFileOffset(t *testing.T, c *TestRun) {
 	testNewProxyConnection(t, _c)
 	assert.NotNil(t, _c.Connection)
 	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
+	//Test Upload after offset
 	fn, _ := makeFile(ctx, t, c, "", offset)
 	fn, ehs := makeFileOffset(ctx, t, c, fn, fsz, offset)
 	rfn, rhs := makeFile(ctx, t, _c, "", offset)
@@ -954,6 +955,20 @@ func testReplicateFileOffset(t *testing.T, c *TestRun) {
 	assert.Equal(t, nhs, ehs)
 	_c.Connection.DeleteFile(ctx, rfn)
 	c.Connection.DeleteFile(ctx, fn)
+	//Test Replicate before offset
+	fn, hs := makeFile(ctx, t, c, "", offset)
+	rfn, _ = makeFile(ctx, t, _c, "", offset)
+	evt, err := _c.Connection.ReplicateRemoteFile(ctx, fn, rfn, address, c.Volume, false, 0, offset, 0, true, true)
+	assert.Nil(t, err)
+	log.Infof("evt %v", evt)
+	nhs, err = readFileOffset(ctx, t, _c, rfn, 0, offset, false)
+	assert.Nil(t, err)
+	assert.Equal(t, nhs, hs)
+	fi, _ := _c.Connection.Stat(ctx, rfn)
+	assert.Equal(t, fi.Size, offset)
+	_c.Connection.DeleteFile(ctx, rfn)
+	c.Connection.DeleteFile(ctx, fn)
+
 }
 
 func testReplicateFileAfterBadURL(t *testing.T, c *TestRun) {
@@ -1333,7 +1348,7 @@ func testReplicateCrashSourceRestart(t *testing.T, c *TestRun) {
 	c.Connection.DeleteFile(ctx, fn)
 }
 
-func testReplicateSync(t *testing.T, c *TestRun) {
+func testReplicateSyncFile(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cfg := &ContainerConfig{containername: "block-6443", hostPort: "6443", mountstorage: false}
@@ -1353,9 +1368,19 @@ func testReplicateSync(t *testing.T, c *TestRun) {
 	nhs, _ := readFile(ctx, t, _c, fn, false)
 	assert.Equal(t, nhs, hs)
 	c.Connection.DeleteFile(ctx, fn)
+
 	time.Sleep(15 * time.Second)
 	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
 	assert.NotNil(t, err)
+	fn, hs = makeFile(ctx, t, c, "", 500*1024*1024)
+	time.Sleep(15 * time.Second)
+	nhs, _ = readFile(ctx, t, _c, fn, false)
+	assert.Equal(t, nhs, hs)
+	c.Connection.DeleteFile(ctx, fn)
+	time.Sleep(15 * time.Second)
+	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
+	assert.NotNil(t, err)
+
 }
 
 func testReplicateSyncUpload(t *testing.T, c *TestRun) {
@@ -1390,6 +1415,7 @@ func testReplicateSyncUpload(t *testing.T, c *TestRun) {
 		if err != nil {
 			t.Errorf("error writing data at %d  %v", offset, err)
 			return
+
 		}
 		offset += int64(len(bt))
 		bt = randBytesMaskImpr(blockSz)
