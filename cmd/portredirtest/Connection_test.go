@@ -299,9 +299,9 @@ func BenchmarkWrites(b *testing.B) {
 	tests := []string{"AZURE", "S3", "BLOCK", "EB"}
 	testTypes := []string{"PROXY", "PROXYDEDUPE", "DIRECTDEDUPE", "NATIVE"}
 	uTest := []ut{{name: "0PercentUnique", pu: 0}, {name: "50PercentUnique", pu: 50}, {name: "100PercentUnique", pu: 100}}
-	sTest := []st{{name: "1GB", sz: int64(1) * gb}, {name: "10GB", sz: int64(10) * gb},
+	sTest := []st{{name: "1GB", sz: int64(1) * gb}, {name: "4GB", sz: int64(4) * gb}, {name: "10GB", sz: int64(10) * gb},
 		{name: "100GB", sz: int64(100) * gb}, {name: "900GB", sz: int64(900) * gb}}
-	tTest := []int{1, 2, 4, 8, 16}
+	tTest := []int{1, 2, 5, 10, 20}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for _, testType := range testTypes {
@@ -478,43 +478,52 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		b.Errorf("error while execing du %d  %v", cr.ExitCode, err)
 	}
 	log.Infof("storage size = %s\n", strings.Split(cr.outBuffer.String(), "\t")[0])
+	var mu sync.Mutex
 	for i := 0; i < b.N; i++ {
 		var ths []*th
-
-		for z := 0; z < threads; z++ {
-			fn := fmt.Sprintf("%s/%s", "/opt/sdfs/tst", string(randBytesMaskImpr(16)))
-			f, err := os.OpenFile(fn, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				b.Errorf("error while creating file %s  %v", fn, err)
-			}
-			defer f.Close()
-			bt := randBytesMaskImpr(blockSz)
-			connection := BConnect(b, c)
-			thh := &th{fn: fn, offset: int64(0), bt: bt, connection: connection, f: f}
-			ths = append(ths, thh)
-			if err != nil {
-				b.Errorf("error while creating hash file %s  %v", fn, err)
-			}
-			ct := 0
-			for thh.offset < fileSize {
-				_, err := thh.f.Write(thh.bt)
-				if err != nil {
-					b.Errorf("error writing data at %d  %v", thh.offset, err)
-					return
-				}
-				thh.offset += int64(len(thh.bt))
-				ct++
-				if ct > inv {
-					thh.bt = nil
-					thh.bt = randBytesMaskImpr(blockSz)
-				}
-				if ct == 100 {
-					ct = 0
-				}
-			}
-		}
-		b.StartTimer()
 		wg := &sync.WaitGroup{}
+		wg.Add(threads)
+		for z := 0; z < threads; z++ {
+			go func() {
+				fn := fmt.Sprintf("%s/%s", "/opt/sdfs/tst", string(randBytesMaskImpr(16)))
+				f, err := os.OpenFile(fn, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				if err != nil {
+					b.Errorf("error while creating file %s  %v", fn, err)
+				}
+				defer f.Close()
+				bt := randBytesMaskImpr(blockSz)
+				connection := BConnect(b, c)
+				thh := &th{fn: fn, offset: int64(0), bt: bt, connection: connection, f: f}
+				mu.Lock()
+				ths = append(ths, thh)
+				mu.Unlock()
+				if err != nil {
+					b.Errorf("error while creating hash file %s  %v", fn, err)
+				}
+				ct := 0
+				for thh.offset < fileSize {
+					_, err := thh.f.Write(thh.bt)
+					if err != nil {
+						b.Errorf("error writing data at %d  %v", thh.offset, err)
+						return
+					}
+					thh.offset += int64(len(thh.bt))
+					ct++
+					if ct > inv {
+						thh.bt = nil
+						thh.bt = randBytesMaskImpr(blockSz)
+					}
+					if ct == 100 {
+						ct = 0
+					}
+				}
+				wg.Done()
+			}()
+
+		}
+		wg.Wait()
+		b.StartTimer()
+		wg = &sync.WaitGroup{}
 		wg.Add(threads)
 		for z := 0; z < threads; z++ {
 			thh := ths[z]
