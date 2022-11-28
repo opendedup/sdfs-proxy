@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"os/exec"
 	"reflect"
@@ -478,14 +479,11 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		b.Errorf("error while execing du %d  %v", cr.ExitCode, err)
 	}
 	log.Infof("storage size = %s\n", strings.Split(cr.outBuffer.String(), "\t")[0])
-	var mu sync.Mutex
 	for i := 0; i < b.N; i++ {
 		var ths []*th
-		wg := &sync.WaitGroup{}
-		wg.Add(threads)
 		for z := 0; z < threads; z++ {
-			go func() {
-				fn := fmt.Sprintf("%s/%s", "/opt/sdfs/tst", string(randBytesMaskImpr(16)))
+			fn := fmt.Sprintf("%s/%d", "/opt/sdfs/tst", z)
+			if _, err := os.Stat(fn); errors.Is(err, os.ErrNotExist) {
 				f, err := os.OpenFile(fn, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
 					b.Errorf("error while creating file %s  %v", fn, err)
@@ -494,9 +492,7 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 				bt := randBytesMaskImpr(blockSz)
 				connection := BConnect(b, c)
 				thh := &th{fn: fn, offset: int64(0), bt: bt, connection: connection, f: f}
-				mu.Lock()
 				ths = append(ths, thh)
-				mu.Unlock()
 				if err != nil {
 					b.Errorf("error while creating hash file %s  %v", fn, err)
 				}
@@ -517,13 +513,14 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 						ct = 0
 					}
 				}
-				wg.Done()
-			}()
-
+			} else {
+				connection := BConnect(b, c)
+				thh := &th{fn: fn, offset: int64(0), connection: connection}
+				ths = append(ths, thh)
+			}
 		}
-		wg.Wait()
 		b.StartTimer()
-		wg = &sync.WaitGroup{}
+		wg := &sync.WaitGroup{}
 		wg.Add(threads)
 		for z := 0; z < threads; z++ {
 			thh := ths[z]
@@ -539,11 +536,12 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		var sz int64
 		var asz int64
 		for z := 0; z < threads; z++ {
-			sz += ths[z].offset
+
 			stat, _ := c.Connection.Stat(ctx, ths[z].fn)
 			asz += stat.IoMonitor.ActualBytesWritten
-			c.Connection.Unlink(ctx, ths[z].fn)
-			os.Remove(ths[z].fn)
+			sz += stat.Size
+			//c.Connection.Unlink(ctx, ths[z].fn)
+			//os.Remove(ths[z].fn)
 		}
 		b.SetBytes(sz)
 		cr, err = DockerExec(ctx, c.Cfg.containername, strings.Split("du -sh /opt/sdfs/volumes/.pool0/chunkstore/chunks", " "))
@@ -552,7 +550,6 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		}
 		log.Infof("actual bytes written= %d storage size = %s\n", asz, strings.Split(cr.outBuffer.String(), "\t")[0])
 	}
-
 }
 
 /*
