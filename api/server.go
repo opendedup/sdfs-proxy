@@ -11,11 +11,13 @@ import (
 	"net"
 	"os"
 	"os/user"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	pool "github.com/processout/grpc-go-pool"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/dgrijalva/jwt-go"
@@ -42,7 +44,7 @@ var serverConfigLock sync.RWMutex
 var remoteTLS bool
 var ecc []sdfs.EncryptionServiceClient
 
-func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor, remoteServerCert bool) {
+func StartServer(Connections map[int64]*grpc.ClientConn, pclnts map[int64]*pool.Pool, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor, remoteServerCert bool) {
 	log.Debug("in")
 	defer log.Debug("out")
 	password = pwd
@@ -50,9 +52,19 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
-	log.SetOutput(os.Stdout)
+	if runtime.GOOS == "windows" {
+		lpth := "c:/temp/sdfs/"
+		f, err := os.OpenFile(fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Failed to create logfile" + fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"))
+			panic(err)
+		}
+		log.SetOutput(f)
+	} else {
+		log.SetOutput(os.Stdout)
+	}
 	log.SetReportCaller(true)
-	fc, err := NewFileIOProxy(Connections, dedupe, proxy, debug)
+	fc, err := NewFileIOProxy(Connections, pclnts, dedupe, proxy, debug)
 	if err != nil {
 		log.Errorf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
 		os.Exit(7)
@@ -69,7 +81,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	}
 	vc := NewVolumeProxy(Connections, pwd, proxy, debug)
 	ec := NewEventProxy(Connections, proxy, debug)
-	sc := NewStorageService(Connections, proxy, debug)
+	sc := NewStorageService(Connections, pclnts, proxy, debug)
 	if pr != nil {
 		pr.iop = fc
 		pr.ep = ec
@@ -111,6 +123,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 		}
 	}
 	maxMsgSize := 240 * 1024 * 1024 //240 MB
+	ic := int32(240 * 1024 * 1024)
 	if ServerTls || ServerMtls {
 		cc, err := LoadKeyPair(ServerMtls, AnyCert, remoteServerCert)
 		if err != nil {
@@ -118,11 +131,12 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 			os.Exit(12)
 		}
 		server = grpc.NewServer(grpc.Creds(*cc), grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
-			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize), grpc.WriteBufferSize(0), grpc.ReadBufferSize(0),
-		)
+			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize),
+			grpc.MaxConcurrentStreams(128), grpc.InitialConnWindowSize(ic), grpc.InitialWindowSize(ic))
 	} else {
 		server = grpc.NewServer(grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
-			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize), grpc.WriteBufferSize(0), grpc.ReadBufferSize(0),
+			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize),
+			grpc.MaxConcurrentStreams(128), grpc.InitialConnWindowSize(ic), grpc.InitialWindowSize(ic),
 		)
 	}
 

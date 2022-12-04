@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"os/exec"
 	"reflect"
@@ -29,6 +30,7 @@ import (
 	api "github.com/opendedup/sdfs-client-go/api"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	paip "github.com/opendedup/sdfs-proxy/api"
+	pool "github.com/processout/grpc-go-pool"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2b"
 	"google.golang.org/grpc"
@@ -491,37 +493,42 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 	log.Infof("storage size = %s\n", strings.Split(cr.outBuffer.String(), "\t")[0])
 	for i := 0; i < b.N; i++ {
 		var ths []*th
-
 		for z := 0; z < threads; z++ {
-			fn := fmt.Sprintf("%s/%s", "/opt/sdfs/tst", string(randBytesMaskImpr(16)))
-			f, err := os.OpenFile(fn, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				b.Errorf("error while creating file %s  %v", fn, err)
-			}
-			defer f.Close()
-			bt := randBytesMaskImpr(blockSz)
-			connection := BConnect(b, c)
-			thh := &th{fn: fn, offset: int64(0), bt: bt, connection: connection, f: f}
-			ths = append(ths, thh)
-			if err != nil {
-				b.Errorf("error while creating hash file %s  %v", fn, err)
-			}
-			ct := 0
-			for thh.offset < fileSize {
-				_, err := thh.f.Write(thh.bt)
+			fn := fmt.Sprintf("%s/%d", "/opt/sdfs/tst", z)
+			if _, err := os.Stat(fn); errors.Is(err, os.ErrNotExist) {
+				f, err := os.OpenFile(fn, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
-					b.Errorf("error writing data at %d  %v", thh.offset, err)
-					return
+					b.Errorf("error while creating file %s  %v", fn, err)
 				}
-				thh.offset += int64(len(thh.bt))
-				ct++
-				if ct > inv {
-					thh.bt = nil
-					thh.bt = randBytesMaskImpr(blockSz)
+				defer f.Close()
+				bt := randBytesMaskImpr(blockSz)
+				connection := BConnect(b, c)
+				thh := &th{fn: fn, offset: int64(0), bt: bt, connection: connection, f: f}
+				ths = append(ths, thh)
+				if err != nil {
+					b.Errorf("error while creating hash file %s  %v", fn, err)
 				}
-				if ct == 100 {
-					ct = 0
+				ct := 0
+				for thh.offset < fileSize {
+					_, err := thh.f.Write(thh.bt)
+					if err != nil {
+						b.Errorf("error writing data at %d  %v", thh.offset, err)
+						return
+					}
+					thh.offset += int64(len(thh.bt))
+					ct++
+					if ct > inv {
+						thh.bt = nil
+						thh.bt = randBytesMaskImpr(blockSz)
+					}
+					if ct == 100 {
+						ct = 0
+					}
 				}
+			} else {
+				connection := BConnect(b, c)
+				thh := &th{fn: fn, offset: int64(0), connection: connection}
+				ths = append(ths, thh)
 			}
 		}
 		b.StartTimer()
@@ -541,11 +548,12 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		var sz int64
 		var asz int64
 		for z := 0; z < threads; z++ {
-			sz += ths[z].offset
+
 			stat, _ := c.Connection.Stat(ctx, ths[z].fn)
 			asz += stat.IoMonitor.ActualBytesWritten
-			c.Connection.Unlink(ctx, ths[z].fn)
-			os.Remove(ths[z].fn)
+			sz += stat.Size
+			//c.Connection.Unlink(ctx, ths[z].fn)
+			//os.Remove(ths[z].fn)
 		}
 		b.SetBytes(sz)
 		cr, err = DockerExec(ctx, c.Cfg.containername, strings.Split("du -sh /opt/sdfs/volumes/.pool0/chunkstore/chunks", " "))
@@ -554,7 +562,6 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		}
 		log.Infof("actual bytes written= %d storage size = %s\n", asz, strings.Split(cr.outBuffer.String(), "\t")[0])
 	}
-
 }
 
 /*
@@ -1471,6 +1478,7 @@ func testReplicateSyncAddRemove(t *testing.T, c *TestRun) {
 	assert.Nil(t, err)
 	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
 	assert.NotNil(t, err)
+
 }
 
 func testReplicateSyncAddRemoveAdd(t *testing.T, c *TestRun) {
@@ -1605,8 +1613,10 @@ func testReplicateSyncRestart(t *testing.T, c *TestRun) {
 	var files []fileinfo
 	for i := 0; i < 8; i++ {
 		fn, fh := makeFile(ctx, t, c, "", 1024*1024*80)
+		log.Infof("fn %s" + fn)
 		files = append(files, fileinfo{fn: fn, fh: fh})
 	}
+
 	StartContainer(ctx, cfg)
 	time.Sleep(2 * time.Minute)
 	knhs, _ := readFile(ctx, t, _c, nfn, false)
@@ -1657,9 +1667,18 @@ func testReplicateSyncSrcRestart(t *testing.T, c *TestRun) {
 	}
 	time.Sleep(120 * time.Second)
 	for _, fi := range files {
+		_, _, err = c.Connection.ListDir(ctx, fi.fn, "", false, 1)
+		assert.Nil(t, err)
+	}
+	for _, fi := range files {
+		log.Infof("nfn %s" + fi.fn)
 		nhs, _ := readFile(ctx, t, _c, fi.fn, false)
 		assert.Equal(t, nhs, fi.fh)
 	}
+	cmd := "cat /etc/sdfs/pool0-volume-cfg.xml"
+	eout, _ := DockerExec(ctx, cfg.containername, strings.Split(cmd, " "))
+	log.Infof("!!!!!!!!!!!!!!!!! out = %v", eout.outBuffer.String())
+	log.Infof("!!!!!!!!!!!!!!!!! err = %v", eout.errBuffer.String())
 }
 
 func testCleanStore(t *testing.T, c *TestRun) {
@@ -2679,6 +2698,7 @@ func StartProxyVolume(tr []*TestRun) {
 
 	cmp := make(map[int64]*grpc.ClientConn)
 	dd := make(map[int64]paip.ForwardEntry)
+	pcmp := make(map[int64]*pool.Pool)
 	portR := &paip.PortRedirectors{}
 	for _, m := range tr {
 		fe := paip.ForwardEntry{Address: m.Url}
@@ -2702,6 +2722,8 @@ func StartProxyVolume(tr []*TestRun) {
 		log.Debugf("connected to volume = %d for %s", connection.Volumeid, m.Cfg.containername)
 		m.Volume = connection.Volumeid
 		cmp[connection.Volumeid] = connection.Clnt
+
+		pcmp[connection.Volumeid] = connection.Cp
 		fe = paip.ForwardEntry{
 			Address:       m.Url,
 			Dedupe:        false,
@@ -2725,12 +2747,13 @@ func StartProxyVolume(tr []*TestRun) {
 	}
 	pf := paip.NewPortRedirector("testpf.json", lport, false, nil, false)
 	pf.Cmp = cmp
+
 	pf.Dd = dd
 	paip.ServerMtls = true
 	paip.AnyCert = true
 	mtls = true
 
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
+	go paip.StartServer(cmp, pcmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 
 }

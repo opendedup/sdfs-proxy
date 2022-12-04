@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
@@ -120,7 +121,17 @@ func NewEventProxy(clnts map[int64]*grpc.ClientConn, proxy, debug bool) *SDFSEve
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
-	log.SetOutput(os.Stdout)
+	if runtime.GOOS == "windows" {
+		lpth := "c:/temp/sdfs/"
+		f, err := os.OpenFile(fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Failed to create logfile" + fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"))
+			panic(err)
+		}
+		log.SetOutput(f)
+	} else {
+		log.SetOutput(os.Stdout)
+	}
 	log.SetReportCaller(true)
 	vcm := make(map[int64]spb.SDFSEventServiceClient)
 	var defaultVolume int64
