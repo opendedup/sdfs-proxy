@@ -15,6 +15,7 @@ import (
 
 type StorageServiceProxy struct {
 	spb.UnimplementedStorageServiceServer
+
 	dd     map[int64]spb.StorageServiceClient
 	pclnts map[int64]*pool.Pool
 	dss    int64
@@ -290,6 +291,7 @@ func (s *StorageServiceProxy) AddReplicaSource(ctx context.Context, req *spb.Add
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
+
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("AddReplicaSource using default volume %d", volid)
 		volid = s.dss
@@ -306,6 +308,7 @@ func (s *StorageServiceProxy) RemoveReplicaSource(ctx context.Context, req *spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
+
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("RemoveReplicaSource using default volume %d", volid)
 		volid = s.dss
@@ -322,6 +325,7 @@ func (s *StorageServiceProxy) WriteSparseDataChunk(ctx context.Context, req *spb
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
+
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
 		volid = s.dss
@@ -344,6 +348,7 @@ func (s *StorageServiceProxy) ReadSparseDataChunk(ctx context.Context, req *spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
+
 	if s.proxy || volid == 0 || volid == -1 {
 		log.Debugf("ReadSparseDataChunk using default volume %d", volid)
 		volid = s.dss
@@ -358,9 +363,7 @@ func (s *StorageServiceProxy) ReadSparseDataChunk(ctx context.Context, req *spb.
 func (s *StorageServiceProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, debug bool) error {
 	log.Debug("in")
 	defer log.Debug("out")
-	//s.configLock.Lock()
-	//defer s.configLock.Unlock()
-	log.Debug("1")
+
 	vcm := make(map[int64]spb.StorageServiceClient)
 	log.Debug("2")
 	var defaultVolume int64
@@ -387,6 +390,7 @@ func (s *StorageServiceProxy) GetMetaDataDedupeFile(ctx context.Context, req *sp
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dss
 	}
