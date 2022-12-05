@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
+	"runtime"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/opendedup/sdfs-client-go/dedupe"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	pool "github.com/processout/grpc-go-pool"
 	"google.golang.org/grpc"
 )
 
@@ -21,15 +22,13 @@ type FileIOProxy struct {
 	proxy         bool
 	dedupe        map[int64]*dedupe.DedupeEngine
 	dedupeEnabled map[int64]ForwardEntry
-	configLock    sync.RWMutex
 }
 
 func (s *FileIOProxy) GetXAttrSize(ctx context.Context, req *spb.GetXAttrSizeRequest) (*spb.GetXAttrSizeResponse, error) {
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -44,8 +43,7 @@ func (s *FileIOProxy) Fsync(ctx context.Context, req *spb.FsyncRequest) (*spb.Fs
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -63,8 +61,7 @@ func (s *FileIOProxy) SetXAttr(ctx context.Context, req *spb.SetXAttrRequest) (*
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -80,8 +77,7 @@ func (s *FileIOProxy) RemoveXAttr(ctx context.Context, req *spb.RemoveXAttrReque
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -96,8 +92,7 @@ func (s *FileIOProxy) GetXAttr(ctx context.Context, req *spb.GetXAttrRequest) (*
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -113,8 +108,7 @@ func (s *FileIOProxy) Utime(ctx context.Context, req *spb.UtimeRequest) (*spb.Ut
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -147,8 +141,7 @@ func (s *FileIOProxy) SymLink(ctx context.Context, req *spb.SymLinkRequest) (*sp
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -163,8 +156,7 @@ func (s *FileIOProxy) GetAttr(ctx context.Context, req *spb.StatRequest) (*spb.S
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -183,8 +175,7 @@ func (s *FileIOProxy) ReadLink(ctx context.Context, req *spb.LinkRequest) (*spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -199,8 +190,7 @@ func (s *FileIOProxy) Flush(ctx context.Context, req *spb.FlushRequest) (*spb.Fl
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -222,8 +212,7 @@ func (s *FileIOProxy) Chown(ctx context.Context, req *spb.ChownRequest) (*spb.Ch
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -239,8 +228,7 @@ func (s *FileIOProxy) Chmod(ctx context.Context, req *spb.ChmodRequest) (*spb.Ch
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -256,8 +244,7 @@ func (s *FileIOProxy) MkDir(ctx context.Context, req *spb.MkDirRequest) (*spb.Mk
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -273,8 +260,7 @@ func (s *FileIOProxy) RmDir(ctx context.Context, req *spb.RmDirRequest) (*spb.Rm
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -289,8 +275,7 @@ func (s *FileIOProxy) Unlink(ctx context.Context, req *spb.UnlinkRequest) (*spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -306,8 +291,7 @@ func (s *FileIOProxy) Write(ctx context.Context, req *spb.DataWriteRequest) (*sp
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -356,7 +340,6 @@ func (s *FileIOProxy) Read(ctx context.Context, req *spb.DataReadRequest) (*spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -364,10 +347,8 @@ func (s *FileIOProxy) Read(ctx context.Context, req *spb.DataReadRequest) (*spb.
 		if dval, ok := s.dedupe[volid]; ok {
 			dval.Sync(req.FileHandle, req.PvolumeID)
 		}
-		s.configLock.RUnlock()
 		return val.Read(ctx, req)
 	} else {
-		s.configLock.RUnlock()
 		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
 }
@@ -376,8 +357,7 @@ func (s *FileIOProxy) Release(ctx context.Context, req *spb.FileCloseRequest) (*
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -399,8 +379,7 @@ func (s *FileIOProxy) Mknod(ctx context.Context, req *spb.MkNodRequest) (*spb.Mk
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -420,8 +399,7 @@ func (s *FileIOProxy) Open(ctx context.Context, req *spb.FileOpenRequest) (*spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -450,8 +428,7 @@ func (s *FileIOProxy) GetaAllFileInfo(req *spb.FileInfoRequest, stream spb.FileI
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -486,8 +463,7 @@ func (s *FileIOProxy) GetFileInfo(ctx context.Context, req *spb.FileInfoRequest)
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -509,8 +485,7 @@ func (s *FileIOProxy) CreateCopy(ctx context.Context, req *spb.FileSnapshotReque
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -529,8 +504,7 @@ func (s *FileIOProxy) FileExists(ctx context.Context, req *spb.FileExistsRequest
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -545,8 +519,7 @@ func (s *FileIOProxy) MkDirAll(ctx context.Context, req *spb.MkDirRequest) (*spb
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -561,8 +534,7 @@ func (s *FileIOProxy) Stat(ctx context.Context, req *spb.FileInfoRequest) (*spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -580,8 +552,7 @@ func (s *FileIOProxy) Rename(ctx context.Context, req *spb.FileRenameRequest) (*
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -600,8 +571,7 @@ func (s *FileIOProxy) CopyExtent(ctx context.Context, req *spb.CopyExtentRequest
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -620,8 +590,7 @@ func (s *FileIOProxy) SetUserMetaData(ctx context.Context, req *spb.SetUserMetaD
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -636,8 +605,7 @@ func (s *FileIOProxy) GetCloudFile(ctx context.Context, req *spb.GetCloudFileReq
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -652,8 +620,7 @@ func (s *FileIOProxy) GetCloudMetaFile(ctx context.Context, req *spb.GetCloudFil
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -668,8 +635,7 @@ func (s *FileIOProxy) StatFS(ctx context.Context, req *spb.StatFSRequest) (*spb.
 	log.Debug("in")
 	defer log.Debug("out")
 	volid := req.PvolumeID
-	s.configLock.RLock()
-	defer s.configLock.RUnlock()
+
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dfc
 	}
@@ -681,11 +647,9 @@ func (s *FileIOProxy) StatFS(ctx context.Context, req *spb.StatFSRequest) (*spb.
 
 }
 
-func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]ForwardEntry, debug bool) error {
+func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, pclnts map[int64]*pool.Pool, dedupeEnabled map[int64]ForwardEntry, debug bool) error {
 	log.Debug("in")
 	defer log.Debug("out")
-	s.configLock.Lock()
-	defer s.configLock.Unlock()
 	fcm := make(map[int64]spb.FileIOServiceClient)
 	dd := make(map[int64]*dedupe.DedupeEngine)
 	var defaultVolume int64
@@ -694,8 +658,9 @@ func (s *FileIOProxy) ReloadVolumeMap(clnts map[int64]*grpc.ClientConn, dedupeEn
 		fcm[indx] = vc
 		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
+			p := pclnts[indx]
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, 4, 8, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
+			de, err := dedupe.NewDedupeEngine(ctx, p, 4, 8, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
 			if err != nil {
 				log.Printf("error initializing dedupe connection: %v\n", err)
 				return err
@@ -717,10 +682,6 @@ func (s *FileIOProxy) SetRetrievalTier(ctx context.Context, req *spb.SetRetrieva
 	defer log.Debug("out")
 
 	volid := req.PvolumeID
-
-	s.configLock.RLock()
-
-	defer s.configLock.RUnlock()
 
 	if s.proxy || volid == 0 || volid == -1 {
 
@@ -746,10 +707,6 @@ func (s *FileIOProxy) GetRetrievalTier(ctx context.Context, req *spb.GetRetrieva
 
 	volid := req.PvolumeID
 
-	s.configLock.RLock()
-
-	defer s.configLock.RUnlock()
-
 	if s.proxy || volid == 0 || volid == -1 {
 
 		volid = s.dfc
@@ -768,13 +725,23 @@ func (s *FileIOProxy) GetRetrievalTier(ctx context.Context, req *spb.GetRetrieva
 
 }
 
-func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]ForwardEntry, proxy, debug bool) (*FileIOProxy, error) {
+func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, pclnts map[int64]*pool.Pool, dedupeEnabled map[int64]ForwardEntry, proxy, debug bool) (*FileIOProxy, error) {
 	fcm := make(map[int64]spb.FileIOServiceClient)
 	dd := make(map[int64]*dedupe.DedupeEngine)
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
-	log.SetOutput(os.Stdout)
+	if runtime.GOOS == "windows" {
+		lpth := "c:/temp/sdfs/"
+		f, err := os.OpenFile(fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Failed to create logfile" + fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"))
+			panic(err)
+		}
+		log.SetOutput(f)
+	} else {
+		log.SetOutput(os.Stdout)
+	}
 	log.SetReportCaller(true)
 	var defaultVolume int64
 	for indx, clnt := range clnts {
@@ -783,7 +750,7 @@ func NewFileIOProxy(clnts map[int64]*grpc.ClientConn, dedupeEnabled map[int64]Fo
 		if dedupeEnabled[indx].Dedupe {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			de, err := dedupe.NewDedupeEngine(ctx, clnt, dedupeEnabled[indx].DedupeBuffer, dedupeEnabled[indx].DedupeThreads, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
+			de, err := dedupe.NewDedupeEngine(ctx, pclnts[indx], dedupeEnabled[indx].DedupeBuffer, dedupeEnabled[indx].DedupeThreads, debug, dedupeEnabled[indx].CompressData, indx, dedupeEnabled[indx].CacheSize, dedupeEnabled[indx].CacheAge)
 			if err != nil {
 				log.Errorf("error initializing dedupe connection: %v\n", err)
 				return nil, err
