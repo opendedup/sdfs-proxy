@@ -1,4 +1,4 @@
-FROM golang:1.13-alpine
+FROM golang:alpine3.15
 
 LABEL maintainer="Sam Silverberg  <sam.silverberg@gmail.com>"
 
@@ -12,4 +12,5 @@ RUN  \
      cd /go/sdfs-proxy && \
      mkdir -p /go/sdfs-proxy/build
 WORKDIR /go/sdfs-proxy/
+RUN go mod tidy
 RUN make clean && make build

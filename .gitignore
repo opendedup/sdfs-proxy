@@ -13,3 +13,16 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+cmd/portredirtest/logs/*.log
+cmd/portredirtest/testpf.json
+test.sh
+benchoutput.txt
+benchmark.txt*
+bench.sh
+build/sdfs-proxy
+.vscode/*
+.vscode/dryrun.log
+.vscode-old/configurationCache.log
+.vscode-old/dryrun.log
+.vscode-old/settings.json
+.vscode-old/targets.log
