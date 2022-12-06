@@ -1,1 +1,0 @@
-{"buildTargets":["all","build","checks","clean","crosscompile","fmt","getdeps","install","lint","verifiers"],"launchTargets":[],"customConfigurationProvider":{"workspaceBrowse":{"browsePath":[],"compilerArgs":[]},"fileIndex":[]}}
