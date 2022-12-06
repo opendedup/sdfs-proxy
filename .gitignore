@@ -22,3 +22,7 @@ bench.sh
 build/sdfs-proxy
 .vscode/*
 .vscode/dryrun.log
+.vscode-old/configurationCache.log
+.vscode-old/dryrun.log
+.vscode-old/settings.json
+.vscode-old/targets.log
