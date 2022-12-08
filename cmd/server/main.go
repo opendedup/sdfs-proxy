@@ -65,6 +65,7 @@ func main() {
 		fmt.Printf("Build Date: %s\n", BuildDate)
 		os.Exit(0)
 	}
+	os.MkdirAll(*logPath, os.ModePerm)
 	f, err := os.OpenFile(fmt.Sprintf("%s/%s", *logPath, "sdfs-proxy.log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Println("Failed to create logfile" + fmt.Sprintf("%s/%s", *logPath, "sdfs-proxy.log"))
