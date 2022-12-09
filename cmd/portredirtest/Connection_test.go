@@ -263,6 +263,12 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			t.Run("testReplicateSyncUpload", func(t *testing.T) {
 				testReplicateSyncUpload(t, c)
 			})
+			t.Run("testReplicateSyncDelete", func(t *testing.T) {
+				testReplicateSyncDelete(t, c)
+			})
+			t.Run("testReplicateSyncCmdAddRemove", func(t *testing.T) {
+				testReplicateSyncCmdAddRemove(t, c)
+			})
 			if c.CloudVol {
 				t.Run("testSetRWSpeed", func(t *testing.T) {
 					testSetRWSpeed(t, c)
@@ -1473,6 +1479,36 @@ func testReplicateSyncAddRemove(t *testing.T, c *TestRun) {
 	assert.NotNil(t, err)
 }
 
+func testReplicateSyncCmdAddRemove(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := &ContainerConfig{containername: "block-6443", hostPort: "6443", mountstorage: false}
+	//c.Cfg = cfg
+	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
+	_c, err := CreateReplBlockSetup(ctx, cfg, address, c.Volume)
+	_c.Direct = true
+	_c.Clientsidededupe = false
+	assert.Nil(t, err)
+	testNewProxyConnection(t, _c)
+	assert.NotNil(t, _c.Connection)
+	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
+	fn, hs := makeFile(ctx, t, c, "", 500*1024*1024)
+	assert.Nil(t, err)
+	time.Sleep(15 * time.Second)
+	nhs, _ := readFile(ctx, t, _c, fn, false)
+	assert.Equal(t, nhs, hs)
+	c.Connection.DeleteFile(ctx, fn)
+	time.Sleep(15 * time.Second)
+	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
+	assert.NotNil(t, err)
+	fn, _ = makeFile(ctx, t, c, "", 5*1024*1024*1024)
+	time.Sleep(10 * time.Second)
+	err = _c.Connection.RemoveReplicationSrc(ctx, address, c.Volume)
+	assert.Nil(t, err)
+	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
+	assert.NotNil(t, err)
+}
+
 func testReplicateSyncAddRemoveAdd(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1510,6 +1546,31 @@ func testReplicateSyncAddRemoveAdd(t *testing.T, c *TestRun) {
 	time.Sleep(30 * time.Second)
 	nhs, _ = readFile(ctx, t, _c, fn, false)
 	assert.Equal(t, nhs, hs)
+}
+
+func testReplicateSyncDelete(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := &ContainerConfig{containername: "block-6443", hostPort: "6443", mountstorage: false}
+	//c.Cfg = cfg
+	_c, err := CreateBlockSetup(ctx, cfg)
+	_c.Direct = true
+	_c.Clientsidededupe = false
+	assert.Nil(t, err)
+	testNewProxyConnection(t, _c)
+	assert.NotNil(t, _c.Connection)
+	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
+
+	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
+	err = _c.Connection.AddReplicationSrc(ctx, address, c.Volume, false)
+	assert.Nil(t, err)
+	time.Sleep(15 * time.Second)
+	fn, _ := makeFile(ctx, t, c, "", 5*1024*1024*1024)
+	c.Connection.DeleteFile(ctx, fn)
+	time.Sleep(30 * time.Second)
+	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
+	assert.NotNil(t, err)
+
 }
 
 func testReplicateSyncAddRemoveNewAdd(t *testing.T, c *TestRun) {
