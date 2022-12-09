@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -65,7 +66,9 @@ func main() {
 		fmt.Printf("Build Date: %s\n", BuildDate)
 		os.Exit(0)
 	}
-	os.MkdirAll(*logPath, 0644)
+	if _, err := os.Stat(*logPath); errors.Is(err, os.ErrNotExist) {
+		os.MkdirAll(*logPath, 0644)
+	}
 	f, err := os.OpenFile(fmt.Sprintf("%s/%s", *logPath, "sdfs-proxy.log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Println("Failed to create logfile" + fmt.Sprintf("%s/%s", *logPath, "sdfs-proxy.log"))
