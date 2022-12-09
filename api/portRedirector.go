@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 
 	pb "github.com/opendedup/sdfs-client-go/api"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	pool "github.com/processout/grpc-go-pool"
 	"google.golang.org/grpc"
 )
 
@@ -24,6 +27,7 @@ type PortRedictor struct {
 	config        string
 	pr            PortRedirectors
 	Cmp           map[int64]*grpc.ClientConn
+	Cmppool       map[int64]*pool.Pool
 	pcmp          []*grpc.ClientConn
 	Dd            map[int64]ForwardEntry
 	configLock    sync.RWMutex
@@ -74,7 +78,7 @@ func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRe
 	if err != nil {
 		return nil, err
 	}
-	err = s.iop.ReloadVolumeMap(s.Cmp, s.Dd, false)
+	err = s.iop.ReloadVolumeMap(s.Cmp, s.Cmppool, s.Dd, false)
 	if err != nil {
 		return nil, err
 	}
@@ -159,14 +163,15 @@ func (s *PortRedictor) localReadConfig() error {
 		return err
 	}
 	cmp := make(map[int64]*grpc.ClientConn)
+	poolcmp := make(map[int64]*pool.Pool)
 	dd := make(map[int64]ForwardEntry)
 	for _, fe := range fes.ForwardEntrys {
 		for i := 1; i < 5; i++ {
 			Connection, err := pb.NewConnection(fe.Address, fe.Dedupe, fe.CompressData, -1, fe.CacheSize, fe.CacheAge)
-
 			if err == nil {
 				log.Debugf("added %d", Connection.Volumeid)
 				cmp[Connection.Volumeid] = Connection.Clnt
+				poolcmp[Connection.Volumeid] = Connection.Cp
 				dd[Connection.Volumeid] = fe
 				break
 			} else {
@@ -182,6 +187,7 @@ func (s *PortRedictor) localReadConfig() error {
 	for _, l := range s.Cmp {
 		s.pcmp = append(s.pcmp, l)
 	}
+	s.Cmppool = poolcmp
 	s.Cmp = cmp
 	s.Dd = dd
 	s.pr = fes
@@ -214,7 +220,17 @@ func NewPortRedirector(config string, listenPort string, portforwarder bool, cln
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
-	log.SetOutput(os.Stdout)
+	if runtime.GOOS == "windows" {
+		lpth := "c:/temp/sdfs/"
+		f, err := os.OpenFile(fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Println("Failed to create logfile" + fmt.Sprintf("%s/%s", lpth, "sdfs-proxy.log"))
+			panic(err)
+		}
+		log.SetOutput(f)
+	} else {
+		log.SetOutput(os.Stdout)
+	}
 	log.SetReportCaller(true)
 	sc := &PortRedictor{config: config, listenPort: listenPort}
 	if portforwarder {

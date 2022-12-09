@@ -41,7 +41,7 @@ build:
 	@mkdir -p $(PWD)/build
 	@echo "Building sdfs-proxy binary to '$(PWD)/build/sdfs-proxy'"
 	@go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfs-proxy cmd/server/*
-	@env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfs-proxy.exe cmd/server/*
+	@env GOARCH=amd64 GOOS=windows go build -ldflags="-X 'main.Version=$(BRANCH)' -X 'main.BuildDate=$$(date -Iseconds)'" -o ./build/sdfs-proxy-s.exe cmd/server/*
 
 # Builds sdfs-proxy and installs it to $GOPATH/bin.
 install: build
