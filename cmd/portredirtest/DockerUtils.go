@@ -413,6 +413,30 @@ func CreateBlockSetup(ctx context.Context, cfg *ContainerConfig) (*TestRun, erro
 	return btr, nil
 }
 
+func CreateSmallBlockSetup(ctx context.Context, cfg *ContainerConfig) (*TestRun, error) {
+	cfg.inputEnv = []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "100GB")}
+	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")
+	if cfg.attachProfiler {
+		cfg.inputEnv = append(cfg.inputEnv, "JAVA_EXT_CMD=-agentpath:/opt/jprofiler13/bin/linux-x64/libjprofilerti.so=port=8849,nowait")
+	}
+	if cfg.encrypt {
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --chunk-store-encrypt=true")
+	} else {
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --io-chunk-size=20480 --io-max-file-write-buffers=40")
+	}
+	cfg.imagename = sdfsimagename
+	cfg.containerPort = "6442"
+	cfg.copyFile = true
+	cfg.cmd = []string{}
+	_, err := RunContainer(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	btr := &TestRun{Url: fmt.Sprintf("sdfs://localhost:%s", cfg.hostPort), Name: "blockstorage", Cfg: cfg, CloudVol: false}
+	log.Infof("config=%v", cfg)
+	return btr, nil
+}
+
 func CreateReplBlockSetup(ctx context.Context, cfg *ContainerConfig, url string, volumeid int64) (*TestRun, error) {
 	cfg.inputEnv = []string{"BACKUP_VOLUME=true", fmt.Sprintf("CAPACITY=%s", "1TB")}
 	cfg.inputEnv = append(cfg.inputEnv, "DISABLE_TLS=true")

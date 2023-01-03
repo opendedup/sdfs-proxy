@@ -266,6 +266,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			t.Run("testReplicateSyncCmdAddRemove", func(t *testing.T) {
 				testReplicateSyncCmdAddRemove(t, c)
 			})
+			t.Run("testDiskFull", func(t *testing.T) {
+				testDiskFull(t, c)
+			})
 			if c.CloudVol {
 				t.Run("testSetRWSpeed", func(t *testing.T) {
 					testSetRWSpeed(t, c)
@@ -496,7 +499,7 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		var ths []*th
 
 		for z := 0; z < threads; z++ {
-			fn := fmt.Sprintf("%s/%s", "/opt/sdfs/tst", string(randBytesMaskImpr(16)))
+			fn := fmt.Sprintf("%s/%d", "/opt/sdfs/tst", z)
 			f, err := os.OpenFile(fn, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
 				b.Errorf("error while creating file %s  %v", fn, err)
@@ -816,7 +819,7 @@ func testMkNod(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	fn, _ := makeFile(ctx, t, c, "", 128)
+	fn, _ := makeFile(ctx, t, c, "", 500*1024*1024)
 	exists, err := c.Connection.FileExists(ctx, fn)
 	assert.Nil(t, err)
 	assert.True(t, exists)
@@ -1350,6 +1353,21 @@ func testReplicateCrashSourceRestart(t *testing.T, c *TestRun) {
 	c.Connection.DeleteFile(ctx, fn)
 }
 
+func testDiskFull(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := &ContainerConfig{containername: "block-6443", hostPort: "6443", mountstorage: false}
+	//c.Cfg = cfg
+	_c, err := CreateSmallBlockSetup(ctx, cfg)
+	_c.Direct = true
+	_c.Clientsidededupe = false
+	assert.Nil(t, err)
+	testNewProxyConnection(t, _c)
+	assert.NotNil(t, _c.Connection)
+	defer StopAndRemoveContainer(ctx, _c.Cfg.containername)
+	makeFile(ctx, t, _c, "", 200*1024*1024*1024)
+}
+
 func testReplicateSyncFile(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1539,15 +1557,18 @@ func testReplicateSyncCmdAddRemove(t *testing.T, c *TestRun) {
 	assert.Equal(t, nhs, hs)
 	c.Connection.DeleteFile(ctx, fn)
 	time.Sleep(15 * time.Second)
+	fn, _ = makeFile(ctx, t, c, "", 5*1024*1024*1024)
+	time.Sleep(20 * time.Second)
+	c.Connection.DeleteFile(ctx, fn)
+	time.Sleep(15 * time.Second)
 	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
-
 	assert.NotNil(t, err)
-	//fn, _ = makeFile(ctx, t, c, "", 5*1024*1024*1024)
-	//time.Sleep(10 * time.Second)
-	//err = _c.Connection.RemoveReplicationSrc(ctx, address, c.Volume)
-	//assert.Nil(t, err)
-	//_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
-	//assert.NotNil(t, err)
+	fn, _ = makeFile(ctx, t, c, "", 5*1024*1024*1024)
+	time.Sleep(20 * time.Second)
+	err = _c.Connection.RemoveReplicationSrc(ctx, address, c.Volume)
+	assert.Nil(t, err)
+	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
+	assert.NotNil(t, err)
 }
 
 func testReplicateSyncAddRemoveNewAdd(t *testing.T, c *TestRun) {
