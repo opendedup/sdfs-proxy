@@ -266,9 +266,12 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			t.Run("testReplicateSyncCmdAddRemove", func(t *testing.T) {
 				testReplicateSyncCmdAddRemove(t, c)
 			})
+<<<<<<< HEAD
 			t.Run("testDiskFull", func(t *testing.T) {
 				testDiskFull(t, c)
 			})
+=======
+>>>>>>> 8fa81aa124fa6120af5bf41ca81e7f7320781b2c
 			if c.CloudVol {
 				t.Run("testSetRWSpeed", func(t *testing.T) {
 					testSetRWSpeed(t, c)
@@ -820,6 +823,17 @@ func testMkNod(t *testing.T, c *TestRun) {
 	defer cancel()
 
 	fn, _ := makeFile(ctx, t, c, "", 500*1024*1024)
+	exists, err := c.Connection.FileExists(ctx, fn)
+	assert.Nil(t, err)
+	assert.True(t, exists)
+	deleteFile(t, c, fn)
+}
+
+func testCrashRead(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fn, _ := makeFile(ctx, t, c, "", 128)
 	exists, err := c.Connection.FileExists(ctx, fn)
 	assert.Nil(t, err)
 	assert.True(t, exists)
@@ -1557,6 +1571,7 @@ func testReplicateSyncCmdAddRemove(t *testing.T, c *TestRun) {
 	assert.Equal(t, nhs, hs)
 	c.Connection.DeleteFile(ctx, fn)
 	time.Sleep(15 * time.Second)
+<<<<<<< HEAD
 	fn, _ = makeFile(ctx, t, c, "", 5*1024*1024*1024)
 	time.Sleep(20 * time.Second)
 	c.Connection.DeleteFile(ctx, fn)
@@ -1569,6 +1584,17 @@ func testReplicateSyncCmdAddRemove(t *testing.T, c *TestRun) {
 	assert.Nil(t, err)
 	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
 	assert.NotNil(t, err)
+=======
+	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
+
+	assert.NotNil(t, err)
+	//fn, _ = makeFile(ctx, t, c, "", 5*1024*1024*1024)
+	//time.Sleep(10 * time.Second)
+	//err = _c.Connection.RemoveReplicationSrc(ctx, address, c.Volume)
+	//assert.Nil(t, err)
+	//_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
+	//assert.NotNil(t, err)
+>>>>>>> 8fa81aa124fa6120af5bf41ca81e7f7320781b2c
 }
 
 func testReplicateSyncAddRemoveNewAdd(t *testing.T, c *TestRun) {
