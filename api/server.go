@@ -20,6 +20,7 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	sdfs "github.com/opendedup/sdfs-client-go/sdfs"
+	pool "github.com/processout/grpc-go-pool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -42,7 +43,7 @@ var serverConfigLock sync.RWMutex
 var remoteTLS bool
 var ecc []sdfs.EncryptionServiceClient
 
-func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor, remoteServerCert bool) {
+func StartServer(Connections map[int64]*grpc.ClientConn, pclnts map[int64]*pool.Pool, port string, enableAuth bool, dedupe map[int64]ForwardEntry, proxy, debug bool, pwd string, pr *PortRedictor, remoteServerCert bool) {
 	log.Debug("in")
 	defer log.Debug("out")
 	password = pwd
@@ -52,7 +53,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	}
 	log.SetOutput(os.Stdout)
 	log.SetReportCaller(true)
-	fc, err := NewFileIOProxy(Connections, dedupe, proxy, debug)
+	fc, err := NewFileIOProxy(Connections, pclnts, dedupe, proxy, debug)
 	if err != nil {
 		log.Errorf("Unable to initialize dedupe enging while starting proxy server %v\n", err)
 		os.Exit(7)
@@ -69,7 +70,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, port string, enableAuth
 	}
 	vc := NewVolumeProxy(Connections, pwd, proxy, debug)
 	ec := NewEventProxy(Connections, proxy, debug)
-	sc := NewStorageService(Connections, proxy, debug)
+	sc := NewStorageService(Connections, pclnts, proxy, debug)
 	if pr != nil {
 		pr.iop = fc
 		pr.ep = ec
@@ -159,6 +160,9 @@ func LoadKeyPair(mtls, anycert bool, rtls bool) (*credentials.TransportCredentia
 			ctx, cancel := context.WithCancel(context.Background())
 			ms, err := clnt.ExportServerCertificate(ctx, &sdfs.ExportServerCertRequest{})
 			cancel()
+			if err != nil {
+				return nil, err
+			}
 			if ms.GetErrorCode() > 0 {
 				log.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)
 				return nil, fmt.Errorf("unable to validate cert %d %s", ms.ErrorCode, ms.Error)

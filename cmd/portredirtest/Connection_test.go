@@ -29,6 +29,7 @@ import (
 	api "github.com/opendedup/sdfs-client-go/api"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
 	paip "github.com/opendedup/sdfs-proxy/api"
+	pool "github.com/processout/grpc-go-pool"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/crypto/blake2b"
 	"google.golang.org/grpc"
@@ -837,17 +838,6 @@ func testCrashRead(t *testing.T, c *TestRun) {
 	deleteFile(t, c, fn)
 }
 
-func testCrashRead(t *testing.T, c *TestRun) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	fn, _ := makeFile(ctx, t, c, "", 128)
-	exists, err := c.Connection.FileExists(ctx, fn)
-	assert.Nil(t, err)
-	assert.True(t, exists)
-	deleteFile(t, c, fn)
-}
-
 func testMkDir(t *testing.T, c *TestRun) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1317,6 +1307,8 @@ func testReplicatePauseCancelCrashRestart(t *testing.T, c *TestRun) {
 	StartContainer(ctx, c.Cfg)
 	StartContainer(ctx, cfg)
 	time.Sleep(8 * time.Minute)
+	_, err = readFile(ctx, t, c, fn, false)
+	assert.Nil(t, err)
 	nhs, err = readFile(ctx, t, _c, fn, false)
 	assert.Nil(t, err)
 	assert.Equal(t, nhs, fh)
@@ -1404,7 +1396,7 @@ func testReplicateSyncFile(t *testing.T, c *TestRun) {
 	_, _, err = _c.Connection.ListDir(ctx, fn, "", false, 1)
 	assert.NotNil(t, err)
 	fn, hs = makeFile(ctx, t, c, "", 500*1024*1024)
-	time.Sleep(15 * time.Second)
+	time.Sleep(30 * time.Second)
 	nhs, _ = readFile(ctx, t, _c, fn, false)
 	assert.Equal(t, nhs, hs)
 	c.Connection.DeleteFile(ctx, fn)
@@ -2749,6 +2741,7 @@ func StartProxyVolume(tr []*TestRun) {
 
 	cmp := make(map[int64]*grpc.ClientConn)
 	dd := make(map[int64]paip.ForwardEntry)
+	pcmp := make(map[int64]*pool.Pool)
 	portR := &paip.PortRedirectors{}
 	for _, m := range tr {
 		fe := paip.ForwardEntry{Address: m.Url}
@@ -2772,6 +2765,7 @@ func StartProxyVolume(tr []*TestRun) {
 		log.Debugf("connected to volume = %d for %s", connection.Volumeid, m.Cfg.containername)
 		m.Volume = connection.Volumeid
 		cmp[connection.Volumeid] = connection.Clnt
+		pcmp[connection.Volumeid] = connection.Cp
 		fe = paip.ForwardEntry{
 			Address:       m.Url,
 			Dedupe:        false,
@@ -2800,7 +2794,7 @@ func StartProxyVolume(tr []*TestRun) {
 	paip.AnyCert = true
 	mtls = true
 
-	go paip.StartServer(cmp, lport, false, dd, false, false, password, pf, false)
+	go paip.StartServer(cmp, pcmp, lport, false, dd, false, false, password, pf, false)
 	fmt.Printf("Server initialized at %s\n", lport)
 
 }

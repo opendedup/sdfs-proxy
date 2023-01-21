@@ -12,6 +12,7 @@ import (
 
 	pb "github.com/opendedup/sdfs-client-go/api"
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	pool "github.com/processout/grpc-go-pool"
 	"google.golang.org/grpc"
 )
 
@@ -24,6 +25,7 @@ type PortRedictor struct {
 	config        string
 	pr            PortRedirectors
 	Cmp           map[int64]*grpc.ClientConn
+	Cmppool       map[int64]*pool.Pool
 	pcmp          []*grpc.ClientConn
 	Dd            map[int64]ForwardEntry
 	configLock    sync.RWMutex
@@ -74,7 +76,7 @@ func (s *PortRedictor) ReloadConfig(ctx context.Context, req *spb.ReloadConfigRe
 	if err != nil {
 		return nil, err
 	}
-	err = s.iop.ReloadVolumeMap(s.Cmp, s.Dd, false)
+	err = s.iop.ReloadVolumeMap(s.Cmp, s.Cmppool, s.Dd, false)
 	if err != nil {
 		return nil, err
 	}
@@ -159,6 +161,7 @@ func (s *PortRedictor) localReadConfig() error {
 		return err
 	}
 	cmp := make(map[int64]*grpc.ClientConn)
+	poolcmp := make(map[int64]*pool.Pool)
 	dd := make(map[int64]ForwardEntry)
 	for _, fe := range fes.ForwardEntrys {
 		for i := 1; i < 5; i++ {
@@ -167,6 +170,7 @@ func (s *PortRedictor) localReadConfig() error {
 			if err == nil {
 				log.Debugf("added %d", Connection.Volumeid)
 				cmp[Connection.Volumeid] = Connection.Clnt
+				poolcmp[Connection.Volumeid] = Connection.Cp
 				dd[Connection.Volumeid] = fe
 				break
 			} else {
@@ -182,6 +186,7 @@ func (s *PortRedictor) localReadConfig() error {
 	for _, l := range s.Cmp {
 		s.pcmp = append(s.pcmp, l)
 	}
+	s.Cmppool = poolcmp
 	s.Cmp = cmp
 	s.Dd = dd
 	s.pr = fes

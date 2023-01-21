@@ -7,15 +7,17 @@ import (
 	"os"
 
 	spb "github.com/opendedup/sdfs-client-go/sdfs"
+	pool "github.com/processout/grpc-go-pool"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
 type StorageServiceProxy struct {
 	spb.UnimplementedStorageServiceServer
-	dd    map[int64]spb.StorageServiceClient
-	dss   int64
-	proxy bool
+	dd     map[int64]spb.StorageServiceClient
+	pclnts map[int64]*pool.Pool
+	dss    int64
+	proxy  bool
 }
 
 func (s *StorageServiceProxy) HashingInfo(ctx context.Context, req *spb.HashingInfoRequest) (*spb.HashingInfoResponse, error) {
@@ -46,6 +48,51 @@ func (s *StorageServiceProxy) ReplicateRemoteFile(ctx context.Context, req *spb.
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
+}
+
+func (s *StorageServiceProxy) WriteChunksStream(stream spb.StorageService_WriteChunksStreamServer) error {
+	var cstream spb.StorageService_WriteChunksStreamClient
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			resp, err := cstream.CloseAndRecv()
+
+			stream.SendAndClose(resp)
+			return err
+		}
+		if err != nil {
+			return err
+		}
+		volid := req.PvolumeID
+		if s.proxy || volid == 0 || volid == -1 {
+			log.Debugf("Replicating using default volume %d", volid)
+			volid = s.dss
+		}
+		if cstream == nil {
+			if val, ok := s.pclnts[volid]; ok {
+				log.Debugf("Replicating using volume %d %d", volid, req.PvolumeID)
+				client, err := val.Get(ctx)
+				if err != nil {
+					return err
+				}
+				defer client.Close()
+				sserv := spb.NewStorageServiceClient(client)
+				cstream, err = sserv.WriteChunksStream(ctx)
+				if err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("unable to find volume %d", volid)
+			}
+		}
+		err = cstream.Send(req)
+		if err != nil {
+			return err
+		}
+	}
+
 }
 
 func (s *StorageServiceProxy) RestoreArchives(ctx context.Context, req *spb.RestoreArchivesRequest) (*spb.RestoreArchivesResponse, error) {
@@ -104,9 +151,15 @@ func (s *StorageServiceProxy) CheckHashes(ctx context.Context, req *spb.CheckHas
 		log.Debugf("CheckHashes using default volume %d", volid)
 		volid = s.dss
 	}
-	if val, ok := s.dd[volid]; ok {
+	if val, ok := s.pclnts[volid]; ok {
 		log.Debugf("CheckHashes using volume %d %d", volid, req.PvolumeID)
-		return val.CheckHashes(ctx, req)
+		client, err := val.Get(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer client.Close()
+		sserv := spb.NewStorageServiceClient(client)
+		return sserv.CheckHashes(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
@@ -135,7 +188,7 @@ func (s *StorageServiceProxy) SubscribeToVolume(req *spb.VolumeEventListenReques
 	defer log.Debug("out")
 	volid := req.PvolumeID
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Debugf("GetChunks using default volume %d", volid)
+		log.Debugf("SubscribeToVolume using default volume %d", volid)
 		volid = s.dss
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -204,7 +257,7 @@ func (s *StorageServiceProxy) ListReplLogs(req *spb.VolumeEventListenRequest, st
 	volid := req.PvolumeID
 
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Debugf("GetChunks using default volume %d", volid)
+		log.Debugf("ListReplLogs using default volume %d", volid)
 		volid = s.dss
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -239,11 +292,11 @@ func (s *StorageServiceProxy) AddReplicaSource(ctx context.Context, req *spb.Add
 	volid := req.PvolumeID
 
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
+		log.Debugf("AddReplicaSource using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
-		log.Debugf("WriteSparseDataChunk using volume %d %d", volid, req.PvolumeID)
+		log.Debugf("AddReplicaSource using volume %d %d", volid, req.PvolumeID)
 		return val.AddReplicaSource(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
@@ -256,11 +309,11 @@ func (s *StorageServiceProxy) RemoveReplicaSource(ctx context.Context, req *spb.
 	volid := req.PvolumeID
 
 	if s.proxy || volid == 0 || volid == -1 {
-		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
+		log.Debugf("RemoveReplicaSource using default volume %d", volid)
 		volid = s.dss
 	}
 	if val, ok := s.dd[volid]; ok {
-		log.Debugf("WriteSparseDataChunk using volume %d %d", volid, req.PvolumeID)
+		log.Debugf("RemoveReplicaSource using volume %d %d", volid, req.PvolumeID)
 		return val.RemoveReplicaSource(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
@@ -276,9 +329,15 @@ func (s *StorageServiceProxy) WriteSparseDataChunk(ctx context.Context, req *spb
 		log.Debugf("WriteSparseDataChunk using default volume %d", volid)
 		volid = s.dss
 	}
-	if val, ok := s.dd[volid]; ok {
+	if val, ok := s.pclnts[volid]; ok {
 		log.Debugf("WriteSparseDataChunk using volume %d %d", volid, req.PvolumeID)
-		return val.WriteSparseDataChunk(ctx, req)
+		client, err := val.Get(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer client.Close()
+		sserv := spb.NewStorageServiceClient(client)
+		return sserv.WriteSparseDataChunk(ctx, req)
 	} else {
 		return nil, fmt.Errorf("unable to find volume %d", volid)
 	}
@@ -323,8 +382,6 @@ func (s *StorageServiceProxy) GetMetaDataDedupeFile(ctx context.Context, req *sp
 	if s.proxy || volid == 0 || volid == -1 {
 		volid = s.dss
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	if val, ok := s.dd[volid]; ok {
 		fi, err := val.GetMetaDataDedupeFile(ctx, req)
 		if err != nil {
@@ -371,7 +428,7 @@ func (s *StorageServiceProxy) GetSparseDedupeFile(req *spb.SparseDedupeFileReque
 	return nil
 }
 
-func NewStorageService(clnts map[int64]*grpc.ClientConn, proxy, debug bool) *StorageServiceProxy {
+func NewStorageService(clnts map[int64]*grpc.ClientConn, pclnts map[int64]*pool.Pool, proxy, debug bool) *StorageServiceProxy {
 	if debug {
 		log.SetLevel(log.DebugLevel)
 	}
@@ -384,7 +441,7 @@ func NewStorageService(clnts map[int64]*grpc.ClientConn, proxy, debug bool) *Sto
 		vcm[indx] = evt
 		defaultVolume = indx
 	}
-	sc := &StorageServiceProxy{dd: vcm, dss: defaultVolume, proxy: proxy}
+	sc := &StorageServiceProxy{dd: vcm, dss: defaultVolume, proxy: proxy, pclnts: pclnts}
 	return sc
 
 }
