@@ -242,6 +242,9 @@ func runMatix(t *testing.T, testType string, tests []string) {
 			t.Run("testReplicateFileOffset", func(t *testing.T) {
 				testReplicateFileOffset(t, c)
 			})
+			t.Run("testReplicateFileOffsetRestart", func(t *testing.T) {
+				testReplicateFileOffsetRestart(t, c)
+			})
 			t.Run("testReplicateFileAfterBadURL", func(t *testing.T) {
 				testReplicateFileAfterBadURL(t, c)
 			})
@@ -932,6 +935,52 @@ func testReplicateFile(t *testing.T, c *TestRun) {
 	assert.Equal(t, stats[0].IoMonitor.ActualBytesWritten, int64(0))
 	_c.Connection.DeleteFile(ctx, fn)
 	_c.Connection.DeleteFile(ctx, fn+"-1")
+	c.Connection.DeleteFile(ctx, fn)
+}
+
+func testReplicateFileOffsetRestart(t *testing.T, c *TestRun) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cfg := &ContainerConfig{containername: "block-6443", hostPort: "6443", mountstorage: false}
+	//c.Cfg = cfg
+	_c, err := CreateBlockSetup(ctx, cfg)
+	_c.Direct = true
+	_c.Clientsidededupe = false
+	offset := int64(16 * 1024 * 1024)
+	fsz := int64(3 * 1024 * 1024 * 1024)
+	assert.Nil(t, err)
+	testNewProxyConnection(t, _c)
+	assert.NotNil(t, _c.Connection)
+	defer StopAndRemoveContainer(ctx, c.Cfg.containername)
+	//Test Upload after offset
+	fn, _ := makeFile(ctx, t, c, "", offset)
+	fn, ehs := makeFileOffset(ctx, t, c, fn, fsz, offset)
+	rfn, rhs := makeFile(ctx, t, _c, "", offset)
+	address := fmt.Sprintf("sdfs://%s:6442", c.Cfg.containername)
+	eid, err := _c.Connection.ReplicateRemoteFile(ctx, fn, rfn, address, c.Volume, false, offset, fsz, offset, true, false)
+	nhs, _ := readFileOffset(ctx, t, _c, rfn, 0, offset, false)
+	assert.Equal(t, nhs, rhs)
+	StopContainer(ctx, c.Cfg.containername)
+
+	StartContainer(ctx, c.Cfg)
+	time.Sleep(6 * time.Minute)
+	for i := 1; i < 5; i++ {
+		evt, err := _c.Connection.GetEvent(ctx, eid.Uuid)
+		assert.Nil(t, err)
+		if err != nil {
+			break
+		}
+		if evt.EndTime > 0 {
+			break
+		}
+		time.Sleep(15 * time.Second)
+	}
+	assert.Nil(t, err)
+	nhs, _ = readFileOffset(ctx, t, _c, rfn, 0, offset, false)
+	assert.Equal(t, nhs, rhs)
+	nhs, _ = readFileOffset(ctx, t, _c, rfn, offset, fsz, true)
+	assert.Equal(t, nhs, ehs)
+	_c.Connection.DeleteFile(ctx, rfn)
 	c.Connection.DeleteFile(ctx, fn)
 }
 
