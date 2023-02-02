@@ -248,9 +248,9 @@ func BenchmarkWrites(b *testing.B) {
 	tests := []string{"AZURE", "S3", "BLOCK", "EB"}
 	testTypes := []string{"PROXY", "PROXYDEDUPE", "DIRECTDEDUPE", "NATIVE"}
 	uTest := []ut{{name: "0PercentUnique", pu: 0}, {name: "50PercentUnique", pu: 50}, {name: "100PercentUnique", pu: 100}}
-	sTest := []st{{name: "1GB", sz: int64(1) * gb}, {name: "10GB", sz: int64(10) * gb},
+	sTest := []st{{name: "1GB", sz: int64(1) * gb}, {name: "4GB", sz: int64(4) * gb}, {name: "10GB", sz: int64(10) * gb},
 		{name: "100GB", sz: int64(100) * gb}, {name: "900GB", sz: int64(900) * gb}}
-	tTest := []int{1, 2, 4, 8, 16}
+	tTest := []int{1, 2, 4, 8, 16, 20}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for _, testType := range testTypes {

@@ -1,6 +1,5 @@
 make --dry-run --always-make --keep-going --print-directory
 make: Entering directory '/home/samsilverberg/git/sdfs-proxy'
- 
 mkdir -p /home/samsilverberg/git/sdfs-proxy/build
 echo "Building sdfs-proxy binary to '/home/samsilverberg/git/sdfs-proxy/build/sdfs-proxy'"
 go build -ldflags="-X 'main.Version=dp3' -X 'main.BuildDate=$(date -Iseconds)'" -o ./build/sdfs-proxy cmd/server/*
