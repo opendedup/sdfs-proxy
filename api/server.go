@@ -112,6 +112,7 @@ func StartServer(Connections map[int64]*grpc.ClientConn, pclnts map[int64]*pool.
 		}
 	}
 	maxMsgSize := 240 * 1024 * 1024 //240 MB
+	ic := int32(240 * 1024 * 1024)
 	if ServerTls || ServerMtls {
 		cc, err := LoadKeyPair(ServerMtls, AnyCert, remoteServerCert)
 		if err != nil {
@@ -119,12 +120,12 @@ func StartServer(Connections map[int64]*grpc.ClientConn, pclnts map[int64]*pool.
 			os.Exit(12)
 		}
 		server = grpc.NewServer(grpc.Creds(*cc), grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
-			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize), grpc.WriteBufferSize(0), grpc.ReadBufferSize(0),
-		)
+			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize),
+			grpc.MaxConcurrentStreams(128), grpc.InitialConnWindowSize(ic), grpc.InitialWindowSize(ic))
 	} else {
 		server = grpc.NewServer(grpc.UnaryInterceptor(serverInterceptor), grpc.StreamInterceptor(serverStreamInterceptor),
-			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize), grpc.WriteBufferSize(0), grpc.ReadBufferSize(0),
-		)
+			grpc.MaxRecvMsgSize(maxMsgSize), grpc.MaxSendMsgSize(maxMsgSize),
+			grpc.MaxConcurrentStreams(128), grpc.InitialConnWindowSize(ic), grpc.InitialWindowSize(ic))
 	}
 
 	sdfs.RegisterVolumeServiceServer(server, vc)
