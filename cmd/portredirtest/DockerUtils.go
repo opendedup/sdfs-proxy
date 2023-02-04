@@ -398,7 +398,7 @@ func CreateBlockSetup(ctx context.Context, cfg *ContainerConfig) (*TestRun, erro
 	if cfg.encrypt {
 		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --chunk-store-encrypt=true")
 	} else {
-		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --io-chunk-size=20480 --io-max-file-write-buffers=40")
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000")
 	}
 	cfg.imagename = sdfsimagename
 	cfg.containerPort = "6442"
@@ -422,7 +422,7 @@ func CreateSmallBlockSetup(ctx context.Context, cfg *ContainerConfig) (*TestRun,
 	if cfg.encrypt {
 		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --chunk-store-encrypt=true")
 	} else {
-		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000 --io-chunk-size=20480 --io-max-file-write-buffers=40")
+		cfg.inputEnv = append(cfg.inputEnv, "EXTENDED_CMD=--hashtable-rm-threshold=1000")
 	}
 	cfg.imagename = sdfsimagename
 	cfg.containerPort = "6442"
@@ -443,7 +443,7 @@ func CreateReplBlockSetup(ctx context.Context, cfg *ContainerConfig, url string,
 	if cfg.attachProfiler {
 		cfg.inputEnv = append(cfg.inputEnv, "JAVA_EXT_CMD=-agentpath:/opt/jprofiler13/bin/linux-x64/libjprofilerti.so=port=8849,nowait")
 	}
-	extcfg := fmt.Sprintf("EXTENDED_CMD=--io-chunk-size=20480 --io-max-file-write-buffers=40 "+
+	extcfg := fmt.Sprintf("EXTENDED_CMD="+
 		"--hashtable-rm-threshold=1000 "+
 		"--enable-repl-sink --repl-source-url=%s --repl-source-volumeid=%d", url, volumeid)
 	if cfg.encrypt {

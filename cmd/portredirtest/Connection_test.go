@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"os/exec"
 	"reflect"
@@ -501,37 +502,42 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 	log.Infof("storage size = %s\n", strings.Split(cr.outBuffer.String(), "\t")[0])
 	for i := 0; i < b.N; i++ {
 		var ths []*th
-
 		for z := 0; z < threads; z++ {
 			fn := fmt.Sprintf("%s/%d", "/opt/sdfs/tst", z)
-			f, err := os.OpenFile(fn, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				b.Errorf("error while creating file %s  %v", fn, err)
-			}
-			defer f.Close()
-			bt := randBytesMaskImpr(blockSz)
-			connection := BConnect(b, c)
-			thh := &th{fn: fn, offset: int64(0), bt: bt, connection: connection, f: f}
-			ths = append(ths, thh)
-			if err != nil {
-				b.Errorf("error while creating hash file %s  %v", fn, err)
-			}
-			ct := 0
-			for thh.offset < fileSize {
-				_, err := thh.f.Write(thh.bt)
+			if _, err := os.Stat(fn); errors.Is(err, os.ErrNotExist) {
+				f, err := os.OpenFile(fn, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 				if err != nil {
-					b.Errorf("error writing data at %d  %v", thh.offset, err)
-					return
+					b.Errorf("error while creating file %s  %v", fn, err)
 				}
-				thh.offset += int64(len(thh.bt))
-				ct++
-				if ct > inv {
-					thh.bt = nil
-					thh.bt = randBytesMaskImpr(blockSz)
+				defer f.Close()
+				bt := randBytesMaskImpr(blockSz)
+				connection := BConnect(b, c)
+				thh := &th{fn: fn, offset: int64(0), bt: bt, connection: connection, f: f}
+				ths = append(ths, thh)
+				if err != nil {
+					b.Errorf("error while creating hash file %s  %v", fn, err)
 				}
-				if ct == 100 {
-					ct = 0
+				ct := 0
+				for thh.offset < fileSize {
+					_, err := thh.f.Write(thh.bt)
+					if err != nil {
+						b.Errorf("error writing data at %d  %v", thh.offset, err)
+						return
+					}
+					thh.offset += int64(len(thh.bt))
+					ct++
+					if ct > inv {
+						thh.bt = nil
+						thh.bt = randBytesMaskImpr(blockSz)
+					}
+					if ct == 100 {
+						ct = 0
+					}
 				}
+			} else {
+				connection := BConnect(b, c)
+				thh := &th{fn: fn, offset: int64(0), connection: connection}
+				ths = append(ths, thh)
 			}
 		}
 		b.StartTimer()
@@ -551,11 +557,12 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		var sz int64
 		var asz int64
 		for z := 0; z < threads; z++ {
-			sz += ths[z].offset
+
 			stat, _ := c.Connection.Stat(ctx, ths[z].fn)
 			asz += stat.IoMonitor.ActualBytesWritten
-			c.Connection.Unlink(ctx, ths[z].fn)
-			os.Remove(ths[z].fn)
+			sz += stat.Size
+			//c.Connection.Unlink(ctx, ths[z].fn)
+			//os.Remove(ths[z].fn)
 		}
 		b.SetBytes(sz)
 		cr, err = DockerExec(ctx, c.Cfg.containername, strings.Split("du -sh /opt/sdfs/volumes/.pool0/chunkstore/chunks", " "))
@@ -564,7 +571,6 @@ func parallelBenchmarkUpload(b *testing.B, c *TestRun, blockSize int, fileSize i
 		}
 		log.Infof("actual bytes written= %d storage size = %s\n", asz, strings.Split(cr.outBuffer.String(), "\t")[0])
 	}
-
 }
 
 /*
